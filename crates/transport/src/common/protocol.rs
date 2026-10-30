@@ -1,76 +1,42 @@
 //! Protocol version and message context utilities
 
 use crate::bindings::wasi::io::streams::OutputStream;
-use crate::bindings::wasmcp::mcp_v20251125::mcp::ProtocolVersion;
-use crate::bindings::wasmcp::mcp_v20251125::server_handler::MessageContext;
-use crate::bindings::wasmcp::mcp_v20251125::server_io::MessageFrame;
+use crate::bindings::wasmcp::mcp_v20260728::mcp::ProtocolVersion;
+use crate::bindings::wasmcp::mcp_v20260728::server_handler::MessageContext;
+use crate::bindings::wasmcp::mcp_v20260728::server_io::{MessageFrame, RequestMeta};
 
-/// Parse protocol version string to enum
-pub fn parse_protocol_version(version: &str) -> Result<ProtocolVersion, String> {
-    match version {
-        "2025-11-25" => Ok(ProtocolVersion::V20251125),
-        "2025-06-18" => Ok(ProtocolVersion::V20250618),
-        "2025-03-26" => Ok(ProtocolVersion::V20250326),
-        "2024-11-05" => Ok(ProtocolVersion::V20241105),
-        _ => Err(format!("Unsupported protocol version: {}", version)),
-    }
-}
+/// The only protocol version this transport speaks
+pub const PROTOCOL_VERSION: &str = "2026-07-28";
 
-/// Convert ProtocolVersion enum to string
-pub fn protocol_version_to_string(version: ProtocolVersion) -> String {
-    match version {
-        ProtocolVersion::V20241105 => "2024-11-05".to_string(),
-        ProtocolVersion::V20250326 => "2025-03-26".to_string(),
-        ProtocolVersion::V20250618 => "2025-06-18".to_string(),
-        ProtocolVersion::V20251125 => "2025-11-25".to_string(),
-    }
-}
+/// Protocol versions advertised by `server/discover`
+pub const SUPPORTED_VERSIONS: &[ProtocolVersion] = &[ProtocolVersion::V20260728];
 
-/// Convert LogLevel enum to string
-pub fn log_level_to_string(level: crate::bindings::wasmcp::mcp_v20251125::mcp::LogLevel) -> String {
-    use crate::bindings::wasmcp::mcp_v20251125::mcp::LogLevel;
-
-    match level {
-        LogLevel::Debug => "debug".to_string(),
-        LogLevel::Info => "info".to_string(),
-        LogLevel::Notice => "notice".to_string(),
-        LogLevel::Warning => "warning".to_string(),
-        LogLevel::Error => "error".to_string(),
-        LogLevel::Critical => "critical".to_string(),
-        LogLevel::Alert => "alert".to_string(),
-        LogLevel::Emergency => "emergency".to_string(),
-    }
-}
-
-/// Create session object from optional session ID and store ID
-pub fn create_session(
-    session_id: Option<&str>,
-    store_id: &str,
-) -> Option<crate::bindings::wasmcp::mcp_v20251125::mcp::Session> {
-    session_id.map(|id| crate::bindings::wasmcp::mcp_v20251125::mcp::Session {
-        session_id: id.to_string(),
-        store_id: store_id.to_string(),
-    })
-}
-
-/// Create MessageContext with common parameters
-///
-/// This eliminates duplication of MessageContext construction across the codebase.
+/// Create MessageContext from the per-request `_meta` values
 pub fn create_message_context<'a>(
     client_stream: Option<&'a OutputStream>,
-    protocol_version: ProtocolVersion,
-    session_id: Option<&str>,
-    identity: Option<&crate::bindings::wasmcp::mcp_v20251125::mcp::Identity>,
-    bucket_name: &str,
+    meta: &RequestMeta,
+    identity: Option<&crate::bindings::wasmcp::mcp_v20260728::mcp::Identity>,
     frame: &MessageFrame,
-    http_context: Option<crate::bindings::wasmcp::mcp_v20251125::server_auth::HttpContext>,
+    http_context: Option<crate::bindings::wasmcp::mcp_v20260728::server_auth::HttpContext>,
 ) -> MessageContext<'a> {
     MessageContext {
         client_stream,
-        protocol_version: protocol_version_to_string(protocol_version),
-        session: create_session(session_id, bucket_name),
+        protocol_version: PROTOCOL_VERSION.to_string(),
+        client_capabilities: meta.client_capabilities.clone(),
+        client_info: meta.client_info.clone(),
+        log_level: meta.log_level,
         identity: identity.cloned(),
         frame: frame.clone(),
         http_context,
+    }
+}
+
+/// Request metadata for internal calls that have no client request (capability probes)
+pub fn empty_meta() -> RequestMeta {
+    RequestMeta {
+        protocol_version: None,
+        client_capabilities: None,
+        client_info: None,
+        log_level: None,
     }
 }

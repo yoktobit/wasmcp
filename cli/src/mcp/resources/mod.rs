@@ -225,10 +225,7 @@ async fn read_local_resource(uri: &str, repo_root: &Path) -> Result<ReadResource
             info!("[LOCAL] Matched wit URI pattern");
             let remainder = uri.strip_prefix("wasmcp://wit/").unwrap();
             // For branch-specific: wit/{branch}/{resource} → {resource}
-            let wit_path = if remainder.starts_with("mcp")
-                || remainder.starts_with("server")
-                || remainder.starts_with("sessions")
-            {
+            let wit_path = if remainder.starts_with("mcp") || remainder.starts_with("server") {
                 // No branch: wit/mcp → mcp
                 remainder
             } else {
@@ -241,9 +238,8 @@ async fn read_local_resource(uri: &str, repo_root: &Path) -> Result<ReadResource
             };
 
             match wit_path {
-                "mcp" => repo_root.join("spec/2025-06-18/wit/mcp.wit"),
-                "server" => repo_root.join("spec/2025-06-18/wit/server.wit"),
-                "sessions" => repo_root.join("spec/2025-06-18/wit/sessions.wit"),
+                "mcp" => repo_root.join("spec/2026-07-28/wit/mcp.wit"),
+                "server" => repo_root.join("spec/2026-07-28/wit/server.wit"),
                 _ => {
                     return Err(McpError::resource_not_found(
                         format!("Unknown WIT resource: {}", wit_path),

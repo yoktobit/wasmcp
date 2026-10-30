@@ -12,8 +12,8 @@ mod bindings {
     });
 }
 
-use bindings::exports::wasmcp::mcp_v20251125::server_handler::{Guest, MessageContext};
-use bindings::wasmcp::mcp_v20251125::mcp;
+use bindings::exports::wasmcp::mcp_v20260728::server_handler::{Guest, MessageContext};
+use bindings::wasmcp::mcp_v20260728::mcp;
 
 struct MethodNotFoundHandler;
 
@@ -30,7 +30,8 @@ impl Guest for MethodNotFoundHandler {
 
         // Determine method name from request variant
         let method = match &request {
-            mcp::ClientRequest::Initialize(_) => "initialize",
+            mcp::ClientRequest::Discover => "server/discover",
+            mcp::ClientRequest::SubscriptionsListen(_) => "subscriptions/listen",
             mcp::ClientRequest::ToolsList(_) => "tools/list",
             mcp::ClientRequest::ToolsCall(_) => "tools/call",
             mcp::ClientRequest::ResourcesList(_) => "resources/list",
@@ -39,10 +40,6 @@ impl Guest for MethodNotFoundHandler {
             mcp::ClientRequest::PromptsList(_) => "prompts/list",
             mcp::ClientRequest::PromptsGet(_) => "prompts/get",
             mcp::ClientRequest::CompletionComplete(_) => "completion/complete",
-            mcp::ClientRequest::LoggingSetLevel(_) => "logging/setLevel",
-            mcp::ClientRequest::Ping(_) => "ping",
-            mcp::ClientRequest::ResourcesSubscribe(_) => "resources/subscribe",
-            mcp::ClientRequest::ResourcesUnsubscribe(_) => "resources/unsubscribe",
         };
 
         // Return MethodNotFound for all requests

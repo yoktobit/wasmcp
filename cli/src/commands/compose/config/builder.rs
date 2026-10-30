@@ -116,7 +116,7 @@ impl ComposeOptionsBuilder {
     /// This allows using a custom component implementation.
     ///
     /// Valid component names: transport, server-io, authorization, kv-store,
-    /// session-store, method-not-found, tools-middleware, resources-middleware,
+    /// method-not-found, tools-middleware, resources-middleware,
     /// prompts-middleware.
     ///
     /// # Examples
@@ -259,7 +259,7 @@ mod tests {
         assert!(
             options
                 .version_resolver
-                .get_version("mcp-v20251125")
+                .get_version("mcp-v20260728")
                 .is_ok()
         );
     }
@@ -278,7 +278,7 @@ mod tests {
         assert!(
             options
                 .version_resolver
-                .get_version("mcp-v20251125")
+                .get_version("mcp-v20260728")
                 .is_ok()
         );
         assert_eq!(

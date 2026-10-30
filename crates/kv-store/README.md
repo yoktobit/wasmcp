@@ -8,7 +8,7 @@ The `kv-store` component provides:
 
 - **Type-safe storage** - TypedValue enum with runtime type validation
 - **Version abstraction** - Supports both `wasi:keyvalue` draft and draft2 via feature flags
-- **Environment integration** - Reads `WASMCP_SESSION_BUCKET` for default bucket selection
+- **Environment integration** - Reads `WASMCP_KV_BUCKET` for default bucket selection
 - **Comprehensive API** - Generic typed operations + convenience methods for each type
 - **Batch operations** - Multi-key get/set/delete for performance
 
@@ -70,76 +70,6 @@ fn my_tool_handler() -> Result<()> {
 
 ## Usage Examples
 
-### Session Storage Pattern
-
-From session-store crate:
-
-```rust
-use wasmcp::keyvalue::store::{self as kv_store, TypedValue};
-
-pub fn save_session_data(
-    session_id: &str,
-    store_id: &str,
-    key: &str,
-    value: TypedValue
-) -> Result<(), Error> {
-    let bucket = kv_store::open(store_id)?;
-
-    // Namespace keys by session ID
-    let kv_key = format!("{}:{}", session_id, key);
-    bucket.set(&kv_key, &value)?;
-
-    Ok(())
-}
-
-pub fn load_session_data(
-    session_id: &str,
-    store_id: &str,
-    key: &str
-) -> Result<Option<TypedValue>, Error> {
-    let bucket = kv_store::open(store_id)?;
-    let kv_key = format!("{}:{}", session_id, key);
-    bucket.get(&kv_key)
-}
-```
-
-### Todo List Storage Pattern
-
-From todo-list-auth example:
-
-```rust
-use wasmcp::keyvalue::store::TypedValue;
-use serde::{Serialize, Deserialize};
-
-#[derive(Serialize, Deserialize)]
-struct TodoItem {
-    id: usize,
-    title: String,
-}
-
-fn save_todo_list(session_id: &str, store_id: &str, items: &[TodoItem]) -> Result<()> {
-    let session = sessions::Session::open(session_id, store_id)?;
-
-    // Serialize to JSON bytes
-    let json_bytes = serde_json::to_vec(items)?;
-
-    // Store as typed binary
-    session.set("todo:list", &TypedValue::AsBytes(json_bytes))?;
-    Ok(())
-}
-
-fn load_todo_list(session_id: &str, store_id: &str) -> Result<Vec<TodoItem>> {
-    let session = sessions::Session::open(session_id, store_id)?;
-
-    match session.get("todo:list")? {
-        Some(TypedValue::AsBytes(bytes)) => {
-            Ok(serde_json::from_slice(&bytes).unwrap_or_default())
-        }
-        _ => Ok(Vec::new())
-    }
-}
-```
-
 ### Counter Pattern
 
 ```rust
@@ -191,7 +121,7 @@ fn load_config(bucket: &Bucket, user_id: &str) -> Result<Option<AppConfig>> {
 # spin.toml
 [component.my-component]
 key_value_stores = ["default"]
-environment = { WASMCP_SESSION_BUCKET = "default" }
+environment = { WASMCP_KV_BUCKET = "default" }
 ```
 
 **Wasmtime runtime:**

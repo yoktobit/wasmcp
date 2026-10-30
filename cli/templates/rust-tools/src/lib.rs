@@ -9,9 +9,9 @@ mod bindings {
     });
 }
 
-use bindings::exports::wasmcp::mcp_v20251125::tools::Guest;
-use bindings::wasmcp::mcp_v20251125::mcp::*;
-use bindings::wasmcp::mcp_v20251125::server_handler::MessageContext;
+use bindings::exports::wasmcp::mcp_v20260728::tools::Guest;
+use bindings::wasmcp::mcp_v20260728::mcp::*;
+use bindings::wasmcp::mcp_v20260728::server_handler::MessageContext;
 
 struct Calculator;
 
@@ -57,6 +57,7 @@ impl Guest for Calculator {
                 },
             ],
             next_cursor: None,
+            cache: None,
             meta: None,
         })
     }

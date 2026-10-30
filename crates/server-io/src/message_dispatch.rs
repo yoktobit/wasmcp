@@ -6,14 +6,20 @@
 //! - Result (has "id" + "result")
 //! - Error (has "id" + "error")
 
-use crate::bindings::exports::wasmcp::mcp_v20251125::server_io::IoError;
-use crate::bindings::wasmcp::mcp_v20251125::mcp::ClientMessage;
+use crate::bindings::exports::wasmcp::mcp_v20260728::server_io::{IoError, ParsedMessage};
+use crate::bindings::wasmcp::mcp_v20260728::mcp::ClientMessage;
 use crate::parser;
 
-/// Parse JSON into client-message variant
-///
+/// Parse JSON into a client message together with its request `_meta`
+pub fn parse_client_message(json: &serde_json::Value) -> Result<ParsedMessage, IoError> {
+    Ok(ParsedMessage {
+        message: parse_message_body(json)?,
+        meta: parser::parse_request_meta(json),
+    })
+}
+
 /// Determines message type based on JSON-RPC structure and delegates to parser module.
-pub fn parse_client_message(json: &serde_json::Value) -> Result<ClientMessage, IoError> {
+fn parse_message_body(json: &serde_json::Value) -> Result<ClientMessage, IoError> {
     // Check for "id" field to distinguish requests from notifications
     let has_id = json.get("id").is_some();
 

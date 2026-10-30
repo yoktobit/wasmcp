@@ -1,7 +1,7 @@
 use crate::INTERNAL_REQUEST_ID_VALUE;
-use crate::bindings::exports::wasmcp::mcp_v20251125::server_handler::MessageContext;
-use crate::bindings::wasmcp::mcp_v20251125::mcp::*;
-use crate::bindings::wasmcp::mcp_v20251125::server_handler as downstream;
+use crate::bindings::exports::wasmcp::mcp_v20260728::server_handler::MessageContext;
+use crate::bindings::wasmcp::mcp_v20260728::mcp::*;
+use crate::bindings::wasmcp::mcp_v20260728::server_handler as downstream;
 use crate::helpers::to_downstream_ctx;
 use crate::types::*;
 use std::collections::{HashMap, HashSet};
@@ -112,6 +112,7 @@ pub fn discover_routing_configs(ctx: &MessageContext) -> Result<Vec<String>, Str
 pub fn read_config_from_uri(ctx: &MessageContext, uri: &str) -> Result<RoutingConfig, String> {
     let request = ReadResourceRequest {
         uri: uri.to_string(),
+        input_retry: None,
     };
 
     let downstream_req = ClientRequest::ResourcesRead(request);

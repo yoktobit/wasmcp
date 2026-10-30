@@ -1,4 +1,4 @@
-//! OAuth claim helper functions for MCP sessions
+//! OAuth claim helper functions for MCP requests
 //!
 //! These helpers allow tools to work with JWT claims from MessageContext.identity
 //! without needing to import separate OAuth packages.
@@ -11,7 +11,7 @@ use jsonwebtoken::get_current_timestamp;
 
 /// Convert structured JWT claims to flat format for storage/serialization
 ///
-/// Useful when storing claims in session KV or passing to external systems.
+/// Useful when storing claims in KV or passing to external systems.
 /// Most tools won't need this - claims are already structured in MessageContext!
 pub fn flatten_claims(claims: &JwtClaims) -> Vec<(String, String)> {
     let mut flat = vec![("sub".to_string(), claims.subject.clone())];

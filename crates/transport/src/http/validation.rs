@@ -2,41 +2,15 @@
 //!
 //! This module contains all header extraction and validation logic for the HTTP transport.
 //! Functions here validate:
-//! - Session IDs (Mcp-Session-Id header)
 //! - JWT tokens (Authorization header)
 //! - Accept headers (application/json and text/event-stream)
-//! - Protocol versions (MCP-Protocol-Version header)
+//! - Protocol versions (MCP-Protocol-Version header vs `_meta`)
+//! - Mcp-Method header presence
 //! - Origins (Origin header for DNS rebinding protection)
 
 use crate::bindings::wasi::cli::environment::get_environment;
 use crate::bindings::wasi::http::types::IncomingRequest;
 use crate::error::TransportError;
-
-/// Supported MCP protocol versions
-///
-/// These versions are accepted in the MCP-Protocol-Version header.
-/// Newest versions should be added to the front of the array.
-const SUPPORTED_PROTOCOL_VERSIONS: &[&str] =
-    &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-
-/// Default protocol version for backwards compatibility
-const DEFAULT_PROTOCOL_VERSION: &str = "2025-03-26";
-
-/// Extract session ID from request headers
-pub fn extract_session_id_header(
-    request: &IncomingRequest,
-) -> Result<Option<String>, TransportError> {
-    let headers = request.headers();
-    let session_id_values = headers.get("mcp-session-id");
-
-    if session_id_values.is_empty() {
-        return Ok(None);
-    }
-
-    String::from_utf8(session_id_values[0].clone())
-        .map(Some)
-        .map_err(|_| TransportError::validation("Invalid Mcp-Session-Id header encoding"))
-}
 
 /// Extract JWT bearer token from Authorization header
 pub fn extract_authorization_header(
@@ -85,27 +59,69 @@ pub fn validate_accept_header(request: &IncomingRequest) -> Result<(), Transport
     Ok(())
 }
 
-/// Validate MCP-Protocol-Version header
-pub fn validate_protocol_version(request: &IncomingRequest) -> Result<String, TransportError> {
-    let headers = request.headers();
-    let version_values = headers.get("mcp-protocol-version");
+fn header_str(request: &IncomingRequest, name: &str) -> Result<Option<String>, TransportError> {
+    let values = request.headers().get(name);
+    match values.first() {
+        None => Ok(None),
+        Some(v) => String::from_utf8(v.clone())
+            .map(Some)
+            .map_err(|_| TransportError::validation(format!("Invalid {} header encoding", name))),
+    }
+}
 
-    if version_values.is_empty() {
-        // Default for backwards compatibility
-        return Ok(DEFAULT_PROTOCOL_VERSION.to_string());
+/// Validate the per-request protocol version: the `MCP-Protocol-Version` header must match
+/// `_meta["io.modelcontextprotocol/protocolVersion"]`, and the version must be supported.
+pub fn validate_protocol_version(
+    request: &IncomingRequest,
+    meta_version: Option<&str>,
+) -> Result<(), TransportError> {
+    let meta_version = meta_version.ok_or_else(|| {
+        TransportError::coded(
+            -32602,
+            "Missing _meta[\"io.modelcontextprotocol/protocolVersion\"]",
+        )
+    })?;
+
+    match header_str(request, "mcp-protocol-version")? {
+        Some(h) if h == meta_version => {}
+        Some(h) => {
+            return Err(TransportError::coded(
+                -32020,
+                format!(
+                    "MCP-Protocol-Version header '{}' does not match _meta protocolVersion '{}'",
+                    h, meta_version
+                ),
+            ));
+        }
+        None => {
+            return Err(TransportError::coded(
+                -32020,
+                "Missing MCP-Protocol-Version header",
+            ));
+        }
     }
 
-    let version_str = String::from_utf8(version_values[0].clone())
-        .map_err(|_| TransportError::validation("Invalid MCP-Protocol-Version header encoding"))?;
+    if meta_version != crate::common::PROTOCOL_VERSION {
+        return Err(TransportError::coded(
+            -32022,
+            format!(
+                "Unsupported protocol version: {}. Supported versions: {}",
+                meta_version,
+                crate::common::PROTOCOL_VERSION
+            ),
+        ));
+    }
+    Ok(())
+}
 
-    if SUPPORTED_PROTOCOL_VERSIONS.contains(&version_str.as_str()) {
-        Ok(version_str)
-    } else {
-        Err(TransportError::protocol(format!(
-            "Unsupported MCP-Protocol-Version: {}. Supported versions: {}",
-            version_str,
-            SUPPORTED_PROTOCOL_VERSIONS.join(", ")
-        )))
+/// Require the `Mcp-Method` header on requests
+///
+/// shortcut: presence only, its value is not compared with the body method; upgrade if
+/// proxies rely on strict header/body consistency.
+pub fn validate_mcp_method_header(request: &IncomingRequest) -> Result<(), TransportError> {
+    match header_str(request, "mcp-method")? {
+        Some(_) => Ok(()),
+        None => Err(TransportError::coded(-32020, "Missing Mcp-Method header")),
     }
 }
 

@@ -20,8 +20,7 @@ key_value_stores = ["default"]
 
 [component.routing-config.environment]
 WASMCP_AUTH_MODE = "oauth"
-WASMCP_SESSION_ENABLED = "true"
-WASMCP_SESSION_BUCKET = "default"  # KV bucket for session storage
+WASMCP_KV_BUCKET = "default"  # KV bucket
 JWT_ISSUER = "wasmcp-local-test"
 JWT_AUDIENCE = "http://localhost:3000"
 JWT_PUBLIC_KEY = "{{ jwt_public_key }}"

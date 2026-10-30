@@ -2,10 +2,11 @@
 //!
 //! Handles serialization of all MCP server request types to JSON-RPC format.
 
-use crate::bindings::wasmcp::mcp_v20251125::mcp::{
-    BlobData, ElicitRequest, EnumSchema, IncludeContext, ModelPreferences, NumberSchemaType,
+use crate::bindings::wasmcp::mcp_v20260728::mcp::{
+    BlobData, ElicitRequest, EnumSchema, IncludeContext, InputRequest, ListRootsRequest,
+    ModelPreferences, NumberSchemaType,
     PrimitiveSchemaDefinition, ProgressToken, RequestedSchema, Role, SamplingContentBlock,
-    SamplingMessage, ServerRequest, StringSchemaFormat, TextData, ToolResultContentBlock,
+    SamplingCreateMessageRequest, SamplingMessage, ServerRequest, StringSchemaFormat, TextData, ToolResultContentBlock,
 };
 use crate::serializer;
 
@@ -15,70 +16,62 @@ use crate::serializer;
 /// Serialize server request to method name and params
 pub fn serialize_server_request(request: &ServerRequest) -> (&'static str, serde_json::Value) {
     match request {
-        ServerRequest::ElicitationCreate(elicit_req) => {
-            ("elicitation/create", serialize_elicit_request(elicit_req))
-        }
-        ServerRequest::RootsList(roots_req) => {
-            let mut params = serde_json::Map::new();
-            if let Some(ref token) = roots_req.progress_token {
-                let token_value = match token {
-                    ProgressToken::String(s) => serde_json::Value::String(s.clone()),
-                    ProgressToken::Integer(i) => {
-                        serde_json::Value::Number(serde_json::Number::from(*i))
-                    }
-                };
-                params.insert("progressToken".to_string(), token_value);
-            }
-            ("roots/list", serde_json::Value::Object(params))
-        }
-        ServerRequest::SamplingCreateMessage(sampling_req) => (
+        ServerRequest::ElicitationCreate(r) => ("elicitation/create", serialize_elicit_request(r)),
+        ServerRequest::RootsList(r) => ("roots/list", serialize_list_roots_request(r)),
+        ServerRequest::SamplingCreateMessage(r) => (
             "sampling/createMessage",
-            serde_json::json!({
-                "messages": sampling_req.messages.iter().map(serialize_sampling_message).collect::<Vec<_>>(),
-                "modelPreferences": sampling_req.model_preferences.as_ref().map(serialize_model_preferences),
-                "systemPrompt": sampling_req.system_prompt,
-                "includeContext": serialize_include_context(&sampling_req.include_context),
-                "temperature": sampling_req.temperature,
-                "maxTokens": sampling_req.max_tokens,
-                "stopSequences": sampling_req.stop_sequences,
-                "metadata": sampling_req.metadata.as_ref().and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok()),
-            }),
+            serialize_sampling_request(r),
         ),
-        ServerRequest::Ping(ping_req) => {
-            let mut params = serde_json::Map::new();
-            if let Some(ref token) = ping_req.progress_token {
-                let token_value = match token {
-                    ProgressToken::String(s) => serde_json::Value::String(s.clone()),
-                    ProgressToken::Integer(i) => {
-                        serde_json::Value::Number(serde_json::Number::from(*i))
-                    }
-                };
-                params.insert("progressToken".to_string(), token_value);
-            }
-            if let Some(ref meta) = ping_req.meta {
-                if let Ok(meta_value) = serde_json::from_str::<serde_json::Value>(meta) {
-                    params.insert("_meta".to_string(), meta_value);
-                }
-            }
-            for (k, v) in &ping_req.extras {
-                if let Ok(value) = serde_json::from_str::<serde_json::Value>(v) {
-                    params.insert(k.clone(), value);
-                }
-            }
-            ("ping", serde_json::Value::Object(params))
-        }
     }
+}
+
+/// Serialize an MRTR input request to method name and params
+pub fn serialize_input_request(request: &InputRequest) -> (&'static str, serde_json::Value) {
+    match request {
+        InputRequest::ElicitationCreate(r) => ("elicitation/create", serialize_elicit_request(r)),
+        InputRequest::RootsList(r) => ("roots/list", serialize_list_roots_request(r)),
+        InputRequest::SamplingCreateMessage(r) => (
+            "sampling/createMessage",
+            serialize_sampling_request(r),
+        ),
+    }
+}
+
+fn serialize_list_roots_request(roots_req: &ListRootsRequest) -> serde_json::Value {
+    let mut params = serde_json::Map::new();
+    if let Some(ref token) = roots_req.progress_token {
+        let token_value = match token {
+            ProgressToken::String(s) => serde_json::Value::String(s.clone()),
+            ProgressToken::Integer(i) => serde_json::Value::Number(serde_json::Number::from(*i)),
+        };
+        params.insert("progressToken".to_string(), token_value);
+    }
+    serde_json::Value::Object(params)
+}
+
+fn serialize_sampling_request(sampling_req: &SamplingCreateMessageRequest) -> serde_json::Value {
+    serde_json::json!({
+        "messages": sampling_req.messages.iter().map(serialize_sampling_message).collect::<Vec<_>>(),
+        "modelPreferences": sampling_req.model_preferences.as_ref().map(serialize_model_preferences),
+        "systemPrompt": sampling_req.system_prompt,
+        "includeContext": serialize_include_context(&sampling_req.include_context),
+        "temperature": sampling_req.temperature,
+        "maxTokens": sampling_req.max_tokens,
+        "stopSequences": sampling_req.stop_sequences,
+        "metadata": sampling_req.metadata.as_ref().and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok()),
+    })
 }
 
 /// Serialize elicit request (form or url variant)
 fn serialize_elicit_request(req: &ElicitRequest) -> serde_json::Value {
     match req {
         ElicitRequest::Form(form) => serde_json::json!({
+            "mode": "form",
             "message": form.message,
             "requestedSchema": serialize_requested_schema(&form.requested_schema),
         }),
         ElicitRequest::Url(url_req) => serde_json::json!({
-            "elicitationId": url_req.elicitation_id,
+            "mode": "url",
             "message": url_req.message,
             "url": url_req.url,
         }),

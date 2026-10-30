@@ -3,17 +3,17 @@
 //! This module handles parsing JSON-RPC requests into WIT types.
 //! Serde handles validation automatically.
 
-use crate::bindings::exports::wasmcp::mcp_v20251125::server_io::IoError;
-use crate::bindings::wasmcp::mcp_v20251125::mcp::{
+use crate::bindings::exports::wasmcp::mcp_v20260728::server_io::{IoError, RequestMeta};
+use crate::bindings::wasmcp::mcp_v20260728::mcp::{
     Annotations, Blob, BlobData, CallToolRequest, CancelledNotification, ClientCapabilities,
     ClientNotification, ClientRequest, ClientResult, CompleteRequest, CompletionArgument,
     CompletionContext, CompletionPromptReference, CompletionReference, ContentBlock,
     ContentOptions, ElicitResult, ElicitResultAction, ElicitResultContent, Error, ErrorCode,
-    GetPromptRequest, Implementation, InitializeRequest, ListPromptsRequest,
+    GetPromptRequest, Implementation, InputResponse, InputRetry, ListPromptsRequest,
     ListResourceTemplatesRequest, ListResourcesRequest, ListRootsResult, ListToolsRequest,
-    LogLevel, NotificationOptions, PingRequest, ProgressNotification, ProgressToken,
+    LogLevel, NotificationOptions, ProgressNotification, ProgressToken,
     ProtocolVersion, ReadResourceRequest, RequestId, Role, Root, SamplingCreateMessageResult,
-    TextContent, TextData,
+    SubscriptionsListenRequest, TextContent, TextData,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -40,30 +40,17 @@ impl From<JsonRequestId> for RequestId {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct JsonInitializeRequestParams {
-    protocol_version: String,
-    capabilities: JsonClientCapabilities,
-    client_info: JsonImplementation,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct JsonClientCapabilities {
     #[serde(default)]
     elicitation: Option<Value>,
     #[serde(default)]
-    experimental: Option<Vec<(String, Value)>>,
+    experimental: Option<serde_json::Map<String, Value>>,
     #[serde(default)]
-    roots: Option<JsonRootsCapability>,
+    extensions: Option<serde_json::Map<String, Value>>,
+    #[serde(default)]
+    roots: Option<Value>,
     #[serde(default)]
     sampling: Option<Value>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct JsonRootsCapability {
-    #[serde(default)]
-    list_changed: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -81,6 +68,7 @@ struct JsonImplementation {
 
 fn parse_protocol_version(s: &str) -> Result<ProtocolVersion, IoError> {
     match s {
+        "2026-07-28" => Ok(ProtocolVersion::V20260728),
         "2025-11-25" => Ok(ProtocolVersion::V20251125),
         "2025-06-18" => Ok(ProtocolVersion::V20250618),
         "2025-03-26" => Ok(ProtocolVersion::V20250326),
@@ -92,24 +80,22 @@ fn parse_protocol_version(s: &str) -> Result<ProtocolVersion, IoError> {
     }
 }
 
-fn convert_client_capabilities(caps: JsonClientCapabilities) -> ClientCapabilities {
-    use crate::bindings::wasmcp::mcp_v20251125::mcp::ClientLists;
+fn json_map_to_pairs(map: serde_json::Map<String, Value>) -> Vec<(String, String)> {
+    map.into_iter()
+        .filter_map(|(k, v)| serde_json::to_string(&v).ok().map(|s| (k, s)))
+        .collect()
+}
 
+fn convert_client_capabilities(caps: JsonClientCapabilities) -> ClientCapabilities {
     ClientCapabilities {
         elicitation: caps
             .elicitation
             .and_then(|v| serde_json::to_string(&v).ok()),
-        experimental: caps.experimental.map(|exp| {
-            exp.into_iter()
-                .filter_map(|(k, v)| serde_json::to_string(&v).ok().map(|s| (k, s)))
-                .collect()
-        }),
-        list_changed: caps
-            .roots
-            .and_then(|r| r.list_changed)
-            .and_then(|lc| if lc { Some(ClientLists::ROOTS) } else { None }),
+        experimental: caps.experimental.map(json_map_to_pairs),
+        extensions: caps.extensions.map(json_map_to_pairs),
+        roots: caps.roots.and_then(|v| serde_json::to_string(&v).ok()),
         sampling: caps.sampling.map(|v| {
-            use crate::bindings::wasmcp::mcp_v20251125::mcp::SamplingCapabilities;
+            use crate::bindings::wasmcp::mcp_v20260728::mcp::SamplingCapabilities;
             SamplingCapabilities {
                 tools: v.get("tools").and_then(|t| t.as_bool()),
                 context: v.get("context").and_then(|c| c.as_bool()),
@@ -149,7 +135,8 @@ pub fn parse_client_request(json: &Value) -> Result<ClientRequest, IoError> {
     let params = json.get("params");
 
     match method {
-        "initialize" => parse_initialize_request(params),
+        "server/discover" => Ok(ClientRequest::Discover),
+        "subscriptions/listen" => parse_subscriptions_listen_request(params),
         "tools/list" => parse_list_tools_request(params),
         "tools/call" => parse_call_tool_request(params),
         "resources/list" => parse_list_resources_request(params),
@@ -158,10 +145,6 @@ pub fn parse_client_request(json: &Value) -> Result<ClientRequest, IoError> {
         "prompts/list" => parse_list_prompts_request(params),
         "prompts/get" => parse_get_prompt_request(params),
         "completion/complete" => parse_complete_request(params),
-        "logging/setLevel" => parse_set_log_level_request(params),
-        "ping" => parse_ping_request(params),
-        "resources/subscribe" => parse_resource_subscribe_request(params),
-        "resources/unsubscribe" => parse_resource_unsubscribe_request(params),
         _ => Err(IoError::Serialization(format!(
             "Unsupported method: {}",
             method
@@ -169,23 +152,106 @@ pub fn parse_client_request(json: &Value) -> Result<ClientRequest, IoError> {
     }
 }
 
-fn parse_initialize_request(params: Option<&Value>) -> Result<ClientRequest, IoError> {
-    let params = params.ok_or_else(|| {
-        IoError::Serialization("Missing params for initialize request".to_string())
-    })?;
+fn parse_subscriptions_listen_request(params: Option<&Value>) -> Result<ClientRequest, IoError> {
+    let flag = |k: &str| {
+        params
+            .and_then(|p| p.get(k))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
+    let resource_subscriptions = params
+        .and_then(|p| p.get("resourceSubscriptions"))
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|u| u.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
 
-    let json_params: JsonInitializeRequestParams = serde_json::from_value(params.clone())
-        .map_err(|e| IoError::Serialization(format!("Invalid initialize params: {}", e)))?;
+    Ok(ClientRequest::SubscriptionsListen(
+        SubscriptionsListenRequest {
+            tools_list_changed: flag("toolsListChanged"),
+            prompts_list_changed: flag("promptsListChanged"),
+            resources_list_changed: flag("resourcesListChanged"),
+            resource_subscriptions,
+        },
+    ))
+}
 
-    let protocol_version = parse_protocol_version(&json_params.protocol_version)?;
-    let capabilities = convert_client_capabilities(json_params.capabilities);
-    let client_info = convert_implementation(json_params.client_info);
+/// Parse `inputResponses` and `requestState` from the params of a retried request
+fn parse_input_retry(params: &Value) -> Result<Option<InputRetry>, IoError> {
+    let request_state = params
+        .get("requestState")
+        .and_then(|s| s.as_str())
+        .map(str::to_string);
+    let input_responses = params
+        .get("inputResponses")
+        .and_then(|r| r.as_object())
+        .map(|obj| {
+            obj.iter()
+                .map(|(k, v)| parse_input_response(v).map(|r| (k.clone(), r)))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
 
-    Ok(ClientRequest::Initialize(InitializeRequest {
-        protocol_version,
-        capabilities,
-        client_info,
+    if request_state.is_none() && input_responses.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(InputRetry {
+        input_responses,
+        request_state,
     }))
+}
+
+fn parse_input_response(result: &Value) -> Result<InputResponse, IoError> {
+    let json = result.to_string();
+    if result.get("action").is_some() {
+        Ok(InputResponse::ElicitationCreate(json))
+    } else if result.get("roots").is_some() {
+        Ok(InputResponse::RootsList(json))
+    } else if result.get("model").is_some() && result.get("role").is_some() {
+        Ok(InputResponse::SamplingCreateMessage(json))
+    } else {
+        Err(IoError::Serialization(
+            "Unable to determine input response type from structure".to_string(),
+        ))
+    }
+}
+
+/// Read the request `_meta` fields defined by MCP 2026-07-28
+pub fn parse_request_meta(json: &Value) -> RequestMeta {
+    let meta = json.get("params").and_then(|p| p.get("_meta"));
+    let get = |k: &str| meta.and_then(|m| m.get(format!("io.modelcontextprotocol/{k}")));
+
+    RequestMeta {
+        protocol_version: get("protocolVersion")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        client_capabilities: get("clientCapabilities")
+            .and_then(|v| serde_json::from_value::<JsonClientCapabilities>(v.clone()).ok())
+            .map(convert_client_capabilities),
+        client_info: get("clientInfo")
+            .and_then(|v| serde_json::from_value::<JsonImplementation>(v.clone()).ok())
+            .map(convert_implementation),
+        log_level: get("logLevel")
+            .and_then(|v| v.as_str())
+            .and_then(parse_log_level),
+    }
+}
+
+fn parse_log_level(s: &str) -> Option<LogLevel> {
+    Some(match s {
+        "debug" => LogLevel::Debug,
+        "info" => LogLevel::Info,
+        "notice" => LogLevel::Notice,
+        "warning" => LogLevel::Warning,
+        "error" => LogLevel::Error,
+        "critical" => LogLevel::Critical,
+        "alert" => LogLevel::Alert,
+        "emergency" => LogLevel::Emergency,
+        _ => return None,
+    })
 }
 
 fn parse_list_tools_request(params: Option<&Value>) -> Result<ClientRequest, IoError> {
@@ -219,6 +285,7 @@ fn parse_call_tool_request(params: Option<&Value>) -> Result<ClientRequest, IoEr
     Ok(ClientRequest::ToolsCall(CallToolRequest {
         name,
         arguments,
+        input_retry: parse_input_retry(params)?,
     }))
 }
 
@@ -246,7 +313,10 @@ fn parse_read_resource_request(params: Option<&Value>) -> Result<ClientRequest, 
         })?
         .to_string();
 
-    Ok(ClientRequest::ResourcesRead(ReadResourceRequest { uri }))
+    Ok(ClientRequest::ResourcesRead(ReadResourceRequest {
+        uri,
+        input_retry: parse_input_retry(params)?,
+    }))
 }
 
 fn parse_list_resource_templates_request(params: Option<&Value>) -> Result<ClientRequest, IoError> {
@@ -293,6 +363,7 @@ fn parse_get_prompt_request(params: Option<&Value>) -> Result<ClientRequest, IoE
     Ok(ClientRequest::PromptsGet(GetPromptRequest {
         name,
         arguments,
+        input_retry: parse_input_retry(params)?,
     }))
 }
 
@@ -370,114 +441,6 @@ fn parse_complete_request(params: Option<&Value>) -> Result<ClientRequest, IoErr
     }))
 }
 
-fn parse_set_log_level_request(params: Option<&Value>) -> Result<ClientRequest, IoError> {
-    let params = params.ok_or_else(|| {
-        IoError::Serialization("Missing params for logging/setLevel request".to_string())
-    })?;
-
-    let level_str = params
-        .get("level")
-        .and_then(|l| l.as_str())
-        .ok_or_else(|| {
-            IoError::Serialization("Missing 'level' field in logging/setLevel params".to_string())
-        })?;
-
-    let level = match level_str {
-        "debug" => LogLevel::Debug,
-        "info" => LogLevel::Info,
-        "notice" => LogLevel::Notice,
-        "warning" => LogLevel::Warning,
-        "error" => LogLevel::Error,
-        "critical" => LogLevel::Critical,
-        "alert" => LogLevel::Alert,
-        "emergency" => LogLevel::Emergency,
-        _ => {
-            return Err(IoError::Serialization(format!(
-                "Invalid log level: {}",
-                level_str
-            )));
-        }
-    };
-
-    Ok(ClientRequest::LoggingSetLevel(level))
-}
-
-fn parse_ping_request(params: Option<&Value>) -> Result<ClientRequest, IoError> {
-    let ping_request = if let Some(p) = params {
-        let progress_token = p.get("progressToken").and_then(|pt| {
-            if let Some(s) = pt.as_str() {
-                Some(ProgressToken::String(s.to_string()))
-            } else {
-                pt.as_i64().map(ProgressToken::Integer)
-            }
-        });
-
-        let meta = p.get("_meta").and_then(|m| serde_json::to_string(m).ok());
-
-        let extras = p
-            .get("extras")
-            .and_then(|e| e.as_object())
-            .map(|obj| {
-                obj.iter()
-                    .filter_map(|(k, v)| {
-                        serde_json::to_string(v)
-                            .ok()
-                            .map(|json_str| (k.clone(), json_str))
-                    })
-                    .collect()
-            })
-            .unwrap_or_else(Vec::new);
-
-        PingRequest {
-            meta,
-            progress_token,
-            extras,
-        }
-    } else {
-        PingRequest {
-            meta: None,
-            progress_token: None,
-            extras: vec![],
-        }
-    };
-
-    Ok(ClientRequest::Ping(ping_request))
-}
-
-fn parse_resource_subscribe_request(params: Option<&Value>) -> Result<ClientRequest, IoError> {
-    let params = params.ok_or_else(|| {
-        IoError::Serialization("Missing params for resources/subscribe request".to_string())
-    })?;
-
-    let uri = params
-        .get("uri")
-        .and_then(|u| u.as_str())
-        .ok_or_else(|| {
-            IoError::Serialization("Missing 'uri' field in resources/subscribe params".to_string())
-        })?
-        .to_string();
-
-    Ok(ClientRequest::ResourcesSubscribe(uri))
-}
-
-fn parse_resource_unsubscribe_request(params: Option<&Value>) -> Result<ClientRequest, IoError> {
-    let params = params.ok_or_else(|| {
-        IoError::Serialization("Missing params for resources/unsubscribe request".to_string())
-    })?;
-
-    let uri = params
-        .get("uri")
-        .and_then(|u| u.as_str())
-        .ok_or_else(|| {
-            IoError::Serialization(
-                "Missing 'uri' field in resources/unsubscribe params".to_string(),
-            )
-        })?
-        .to_string();
-
-    Ok(ClientRequest::ResourcesUnsubscribe(uri))
-}
-
 /// Parse a JSON-RPC notification into a ClientNotification
 pub fn parse_client_notification(json: &Value) -> Result<ClientNotification, IoError> {
     let method = json.get("method").and_then(|m| m.as_str()).ok_or_else(|| {
@@ -487,14 +450,6 @@ pub fn parse_client_notification(json: &Value) -> Result<ClientNotification, IoE
     let params = json.get("params");
 
     match method {
-        "notifications/initialized" => {
-            let opts = parse_notification_options(params)?;
-            Ok(ClientNotification::Initialized(opts))
-        }
-        "notifications/roots/list_changed" => {
-            let opts = parse_notification_options(params)?;
-            Ok(ClientNotification::RootsListChanged(opts))
-        }
         "notifications/cancelled" => {
             let params = params.ok_or_else(|| {
                 IoError::Serialization("Missing params for cancelled notification".to_string())
@@ -994,8 +949,8 @@ fn parse_annotations(annot: &Value) -> Result<Annotations, IoError> {
 /// Wraps parse_client_response and extracts just the result variant
 pub fn parse_client_result(
     json: &Value,
-) -> Result<ClientResult, crate::bindings::exports::wasmcp::mcp_v20251125::server_io::IoError> {
-    use crate::bindings::exports::wasmcp::mcp_v20251125::server_io::IoError;
+) -> Result<ClientResult, crate::bindings::exports::wasmcp::mcp_v20260728::server_io::IoError> {
+    use crate::bindings::exports::wasmcp::mcp_v20260728::server_io::{IoError, RequestMeta};
 
     match parse_client_response(json) {
         Ok(Ok(result)) => Ok(result),
@@ -1012,10 +967,10 @@ pub fn parse_client_result(
 pub fn parse_error(
     json: &Value,
 ) -> Result<
-    crate::bindings::wasmcp::mcp_v20251125::mcp::ErrorCode,
-    crate::bindings::exports::wasmcp::mcp_v20251125::server_io::IoError,
+    crate::bindings::wasmcp::mcp_v20260728::mcp::ErrorCode,
+    crate::bindings::exports::wasmcp::mcp_v20260728::server_io::IoError,
 > {
-    use crate::bindings::exports::wasmcp::mcp_v20251125::server_io::IoError;
+    use crate::bindings::exports::wasmcp::mcp_v20260728::server_io::{IoError, RequestMeta};
 
     match parse_client_response(json) {
         Ok(Err(error_code)) => Ok(error_code),

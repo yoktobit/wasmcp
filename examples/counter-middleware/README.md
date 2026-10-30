@@ -1,13 +1,13 @@
 # Counter Middleware
 
-Server middleware that tracks downstream tool invocations during a given session using the `session-storage` crate.
+Server middleware that tracks downstream tool invocations across requests using the `wasmcp:keyvalue/store` interface (the 2026-07-28 protocol has no sessions, so the counter is global).
 
 ## Overview
 
 This example demonstrates **two important patterns** in wasmcp:
 
 - **Middleware Pattern**: Intercepting and transforming MCP requests
-- **Session Storage**: Persisting state across requests within a session
+- **Key-Value Storage**: Persisting state across requests via key-value storage
 
 Counter-middleware sits between the client and your capability providers, counting every tool call that flows through it while transparently passing requests downstream.
 
@@ -18,31 +18,6 @@ In wasmcp, middleware components:
 - **Intercept** specific requests they care about
 - **Delegate** all other requests to the downstream handler unchanged
 - **Can add** new capabilities (like our `get-count` tool)
-
-## Session Storage
-
-Sessions provide persistent key-value storage that:
-
-- Survives across multiple requests
-- Is scoped to a single client session
-- Works across all runtimes (Spin, Wasmtime, wasmCloud)
-
-### Using Sessions
-
-```rust
-use bindings::wasmcp::mcp_v20250618::sessions::Session;
-
-// Open a session
-if let Ok(session) = Session::open(&session_id, &store_id) {
-    // Read a value
-    if let Ok(Some(bytes)) = session.get("my-key") {
-        let value = String::from_utf8(bytes)?;
-    }
-
-    // Write a value
-    session.set("my-key", b"my-value")?;
-}
-```
 
 ## How It Works
 
@@ -62,7 +37,7 @@ When a client calls a tool:
 
 1. Check if it's calling our `get-count` tool → handle it directly
 2. Otherwise, delegate to downstream handler
-3. If downstream succeeds, increment the session counter
+3. If downstream succeeds, increment the counter
 4. Return the downstream result
 
 This is how middleware can **observe and count** operations.
@@ -133,14 +108,14 @@ wasmcp mcp call-tool get-count
 {
   "content": [{
     "type": "text",
-    "text": "Total tool calls in this session: 5"
+    "text": "Total tool calls : 5"
   }]
 }
 ```
 
 This tool demonstrates:
 - Middleware adding new capabilities
-- Reading from session storage
+- Reading from key-value storage
 - Sending notifications via server-io
 
 ## Code Walkthrough
@@ -169,25 +144,13 @@ impl Guest for Counter {
 }
 ```
 
-### Session Counter
+### Counter
 
 ```rust
-fn increment_counter(ctx: &MessageContext) {
-    if let Some(session_info) = &ctx.session {
-        if let Ok(session) = Session::open(&session_info.session_id, &session_info.store_id) {
-            // Read current count
-            let current = session.get("tool_call_count")
-                .and_then(|bytes| String::from_utf8(bytes).ok())
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(0);
-
-            // Increment and save
-            let new_count = current + 1;
-            session.set("tool_call_count", new_count.to_string().as_bytes())?;
-
-            // Notify client
-            log_notification(ctx, format!("Counter: {}", new_count), LogLevel::Info);
-        }
+fn increment_counter() {
+    if let Ok(bucket) = kv::open("") {
+        let current = bucket.get_u64("tool_call_count").ok().flatten().unwrap_or(0);
+        let _ = bucket.set_u64("tool_call_count", current + 1);
     }
 }
 ```
@@ -196,7 +159,7 @@ fn increment_counter(ctx: &MessageContext) {
 
 - **Middleware pattern**: Import + export server-handler to sit in the middle
 - **Composition order**: Left-to-right wrapping (middleware before providers)
-- **Session storage**: Persistent state across requests within a session
+- **Key-value storage**: Persistent state across requests
 - **Transparency**: Delegate what you don't care about
 - **Extensibility**: Add new tools while preserving downstream capabilities
 
@@ -214,7 +177,7 @@ wasmcp mcp call-tool subtract '{"a": 10, "b": 4}'
 
 # Check the count
 wasmcp mcp call-tool get-count
-# Output: "Total tool calls in this session: 2"
+# Output: "Total tool calls : 2"
 ```
 
-Each tool invocation increments the counter, and `get-count` retrieves the current value from session storage.
+Each tool invocation increments the counter, and `get-count` retrieves the current value from key-value storage.

@@ -2,7 +2,7 @@
 //!
 //! This module handles resolving component specifications to local file paths:
 //! - Spec resolution (aliases, paths, registry packages)
-//! - Framework component resolution (transport, server-io, session-store, method-not-found)
+//! - Framework component resolution (transport, server-io, method-not-found)
 //! - Dependency downloading and caching
 
 pub mod dependencies;

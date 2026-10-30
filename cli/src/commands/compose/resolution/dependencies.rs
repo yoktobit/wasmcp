@@ -31,9 +31,9 @@ pub struct DownloadConfig<'a> {
 fn map_interface_to_component(interface: &str) -> Option<&'static str> {
     // Interface format: "namespace:package/interface@version"
     // Examples:
-    // - "wasmcp:mcp-v20251125/server-io@0.1.7" -> "server-io"
+    // - "wasmcp:mcp-v20260728/server-io@0.1.0" -> "server-io"
     // - "wasmcp:keyvalue/store@0.1.0" -> "kv-store"
-    // - "wasmcp:mcp-v20251125/tools@0.1.7" -> "tools-middleware"
+    // - "wasmcp:mcp-v20260728/tools@0.1.0" -> "tools-middleware"
 
     if !interface.starts_with("wasmcp:") {
         return None;
@@ -58,7 +58,6 @@ fn map_interface_to_component(interface: &str) -> Option<&'static str> {
         "resources" => Some(ComponentType::ResourcesMiddleware.name()),
         "prompts" => Some(ComponentType::PromptsMiddleware.name()),
         "store" if interface.contains("keyvalue") => Some(ComponentType::KvStore.name()),
-        "sessions" | "session-manager" => Some(ComponentType::SessionStore.name()),
         _ => None,
     }
 }
@@ -180,8 +179,6 @@ pub async fn download_dependencies(
     required.insert(ComponentType::HttpTransport.name().to_string());
     // Method-not-found is always the terminal handler
     required.insert(ComponentType::MethodNotFound.name().to_string());
-    // Session-store is always needed (transport depends on it)
-    required.insert(ComponentType::SessionStore.name().to_string());
 
     // Include only the middleware that was discovered as needed
     // We already inspected component exports to determine which middleware is required
@@ -232,9 +229,7 @@ pub fn get_dependency_path(
     deps_dir: &Path,
 ) -> Result<PathBuf> {
     // *-d2 variants use the same version as their base component
-    let version_key = if name == "session-store-d2" {
-        ComponentType::SessionStore.name()
-    } else if name == "kv-store-d2" {
+    let version_key = if name == "kv-store-d2" {
         ComponentType::KvStore.name()
     } else {
         name
@@ -288,11 +283,11 @@ mod tests {
     fn test_interface_naming_server_handler() {
         assert_eq!(
             interfaces::server_handler("0.1.0"),
-            "wasmcp:mcp-v20251125/server-handler@0.1.0"
+            "wasmcp:mcp-v20260728/server-handler@0.1.0"
         );
         assert_eq!(
             interfaces::server_handler("1.0.0"),
-            "wasmcp:mcp-v20251125/server-handler@1.0.0"
+            "wasmcp:mcp-v20260728/server-handler@1.0.0"
         );
     }
 
@@ -300,11 +295,11 @@ mod tests {
     fn test_interface_naming_tools() {
         assert_eq!(
             interfaces::tools("0.1.0"),
-            "wasmcp:mcp-v20251125/tools@0.1.0"
+            "wasmcp:mcp-v20260728/tools@0.1.0"
         );
         assert_eq!(
             interfaces::tools("1.0.0"),
-            "wasmcp:mcp-v20251125/tools@1.0.0"
+            "wasmcp:mcp-v20260728/tools@1.0.0"
         );
     }
 
@@ -393,33 +388,33 @@ mod tests {
 
     #[test]
     fn test_map_interface_to_component() {
-        // Test mcp-v20251125 interfaces
+        // Test mcp-v20260728 interfaces
         assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/server-transport@0.1.7"),
+            map_interface_to_component("wasmcp:mcp-v20260728/server-transport@0.1.0"),
             Some("transport")
         );
         assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/server-io@0.1.7"),
+            map_interface_to_component("wasmcp:mcp-v20260728/server-io@0.1.0"),
             Some("server-io")
         );
         assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/server-handler@0.1.7"),
+            map_interface_to_component("wasmcp:mcp-v20260728/server-handler@0.1.0"),
             Some("method-not-found")
         );
         assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/server-auth@0.1.7"),
+            map_interface_to_component("wasmcp:mcp-v20260728/server-auth@0.1.0"),
             Some("authorization")
         );
         assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/tools@0.1.7"),
+            map_interface_to_component("wasmcp:mcp-v20260728/tools@0.1.0"),
             Some("tools-middleware")
         );
         assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/resources@0.1.7"),
+            map_interface_to_component("wasmcp:mcp-v20260728/resources@0.1.0"),
             Some("resources-middleware")
         );
         assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/prompts@0.1.7"),
+            map_interface_to_component("wasmcp:mcp-v20260728/prompts@0.1.0"),
             Some("prompts-middleware")
         );
 
@@ -427,16 +422,6 @@ mod tests {
         assert_eq!(
             map_interface_to_component("wasmcp:keyvalue/store@0.1.0"),
             Some("kv-store")
-        );
-
-        // Test session interfaces
-        assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/sessions@0.1.7"),
-            Some("session-store")
-        );
-        assert_eq!(
-            map_interface_to_component("wasmcp:mcp-v20251125/session-manager@0.1.7"),
-            Some("session-store")
         );
 
         // Test non-wasmcp interfaces

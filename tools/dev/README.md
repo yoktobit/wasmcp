@@ -81,7 +81,7 @@ Build all workspace components in the correct order:
 <your-command> build
 
 # Build only specific components
-<your-command> build --only session-store,transport
+<your-command> build --only kv-store,transport
 ```
 
 This replaces the manual process from the shell script:
@@ -122,7 +122,6 @@ The `--local-overrides` flag automatically adds all local override flags:
 - `--override-transport ./target/wasm32-wasip2/release/transport.wasm`
 - `--override-server-io ./target/wasm32-wasip2/release/server_io.wasm`
 - `--override-kv-store ./target/wasm32-wasip2/release/kv_store-d2.wasm`
-- `--override-session-store ./target/wasm32-wasip2/release/session_store.wasm`
 - And all other middleware overrides
 
 ### Running Composed Components

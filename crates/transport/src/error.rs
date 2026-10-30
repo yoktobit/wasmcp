@@ -3,51 +3,8 @@
 //! Provides a unified error type for all transport-layer operations,
 //! eliminating the need for repeated error handling boilerplate.
 
-use crate::bindings::wasmcp::mcp_v20251125::mcp::ErrorCode;
-use crate::bindings::wasmcp::mcp_v20251125::server_io::IoError;
-
-/// Session-specific error types
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionError {
-    /// Session not found in storage
-    NotFound,
-    /// Session has been terminated
-    Terminated,
-    /// Session ID required but not provided
-    Required,
-    /// Session validation failed
-    ValidationFailed(String),
-    /// Session storage operation failed
-    StorageFailed(String),
-    /// JWT identity does not match session's bound identity (session hijacking attempt)
-    IdentityMismatch(String),
-}
-
-impl SessionError {
-    /// Get HTTP status code for this session error
-    pub fn http_status_code(&self) -> u16 {
-        match self {
-            Self::NotFound => 404,
-            Self::Terminated => 404,
-            Self::Required => 400,
-            Self::ValidationFailed(_) => 400,
-            Self::StorageFailed(_) => 500,
-            Self::IdentityMismatch(_) => 403, // Forbidden - valid JWT but wrong session
-        }
-    }
-
-    /// Get error message
-    pub fn message(&self) -> String {
-        match self {
-            Self::NotFound => "Session error: not found".to_string(),
-            Self::Terminated => "Session error: terminated".to_string(),
-            Self::Required => "Session error: ID required for non-initialize requests".to_string(),
-            Self::ValidationFailed(msg) => format!("Session validation error: {}", msg),
-            Self::StorageFailed(msg) => format!("Session storage error: {}", msg),
-            Self::IdentityMismatch(msg) => format!("Session identity mismatch: {}", msg),
-        }
-    }
-}
+use crate::bindings::wasmcp::mcp_v20260728::mcp::ErrorCode;
+use crate::bindings::wasmcp::mcp_v20260728::server_io::IoError;
 
 /// Unified transport error type
 #[derive(Debug)]
@@ -79,8 +36,8 @@ pub enum TransportError {
     /// Protocol-level error (MCP protocol violations)
     Protocol(String),
 
-    /// Session management error
-    Session(SessionError),
+    /// Error with an explicit JSON-RPC code (e.g. -32020 header mismatch, -32022 unsupported version)
+    Coded { code: i32, message: String },
 
     /// Internal error (should not happen in normal operation)
     Internal(String),
@@ -125,24 +82,12 @@ impl TransportError {
         Self::Protocol(msg.into())
     }
 
-    /// Create a session error
-    pub fn session(error: SessionError) -> Self {
-        Self::Session(error)
-    }
-
-    /// Convenience constructor for session not found error
-    pub fn session_not_found() -> Self {
-        Self::Session(SessionError::NotFound)
-    }
-
-    /// Convenience constructor for session terminated error
-    pub fn session_terminated() -> Self {
-        Self::Session(SessionError::Terminated)
-    }
-
-    /// Convenience constructor for session required error
-    pub fn session_required() -> Self {
-        Self::Session(SessionError::Required)
+    /// Create a 400 error with an explicit JSON-RPC code
+    pub fn coded(code: i32, msg: impl Into<String>) -> Self {
+        Self::Coded {
+            code,
+            message: msg.into(),
+        }
     }
 
     /// Create an internal error
@@ -157,9 +102,17 @@ impl TransportError {
             Self::Unauthorized { .. } => 401,
             Self::Forbidden(_) => 403,
             Self::Protocol(_) => 400,
-            Self::Session(session_error) => session_error.http_status_code(),
+            Self::Coded { .. } => 400,
             Self::Io(_) => 500,
             Self::Internal(_) => 500,
+        }
+    }
+
+    /// JSON-RPC error code for the response body
+    pub fn json_rpc_code(&self) -> i32 {
+        match self {
+            Self::Coded { code, .. } => *code,
+            _ => -32700,
         }
     }
 
@@ -181,7 +134,7 @@ impl TransportError {
             Self::Unauthorized { message, .. } => message.clone(),
             Self::Forbidden(msg) => msg.clone(),
             Self::Protocol(msg) => msg.clone(),
-            Self::Session(session_error) => session_error.message(),
+            Self::Coded { message, .. } => message.clone(),
             Self::Io(e) => format!("I/O error: {:?}", e),
             Self::Internal(msg) => msg.clone(),
         }

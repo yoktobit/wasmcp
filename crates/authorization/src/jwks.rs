@@ -61,10 +61,7 @@ struct CachedJwks {
 pub fn fetch_jwks(jwks_uri: &str) -> Result<Jwks> {
     let cache_key = "oauth-jwks";
 
-    // Get bucket name from environment (must match MCP_SESSION_BUCKET)
-    let bucket_name = std::env::var("MCP_SESSION_BUCKET")
-        .or_else(|_| std::env::var("MCP_KV_BUCKET"))
-        .unwrap_or_else(|_| "default".to_string());
+    let bucket_name = std::env::var("MCP_KV_BUCKET").unwrap_or_else(|_| "default".to_string());
 
     // Open KV bucket for caching
     let bucket = kv::open(&bucket_name).map_err(|e| {

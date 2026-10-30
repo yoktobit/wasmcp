@@ -10,7 +10,6 @@ mod diagnostic;
 mod filtering;
 mod helpers;
 mod metadata;
-mod session;
 mod types;
 
 // JSON-RPC 2.0 error codes
@@ -21,15 +20,14 @@ const JSONRPC_METHOD_NOT_FOUND: i64 = -32601;
 // Internal request ID for middleware's own requests
 const INTERNAL_REQUEST_ID_VALUE: i64 = 0;
 
-use bindings::exports::wasmcp::mcp_v20251125::server_handler::{Guest, MessageContext};
-use bindings::wasmcp::mcp_v20251125::mcp::*;
-use bindings::wasmcp::mcp_v20251125::server_handler as downstream;
+use bindings::exports::wasmcp::mcp_v20260728::server_handler::{Guest, MessageContext};
+use bindings::wasmcp::mcp_v20260728::mcp::*;
+use bindings::wasmcp::mcp_v20260728::server_handler as downstream;
 
 use config::load_and_aggregate_configs;
 use diagnostic::{create_inspect_routing_tool, handle_inspect_routing};
 use filtering::FilteringPipeline;
 use helpers::{delegate_to_downstream, extract_path, fetch_tools_from_downstream};
-use session::{load_tool_registry, store_tool_registry};
 
 /// Create a JSON-RPC error response with the given code and message
 fn create_error(code: i64, message: String) -> ErrorCode {
@@ -119,19 +117,12 @@ fn handle_tools_list(
     // Inject inspect_routing diagnostic tool
     filtered_tools.push(create_inspect_routing_tool());
 
-    // Store filtered tool names in session for validation in tools/call
-    if let Err(e) = store_tool_registry(ctx, &filtered_tools) {
-        return Err(create_error(
-            JSONRPC_INTERNAL_ERROR,
-            format!("Failed to store tool registry: {}", e),
-        ));
-    }
-
     // Return filtered list with diagnostic tool
     Ok(ServerResult::ToolsList(ListToolsResult {
         tools: filtered_tools,
         next_cursor: None,
         meta: None,
+        cache: None,
     }))
 }
 
@@ -146,57 +137,27 @@ fn handle_tools_call(
         return handle_inspect_routing(ctx);
     }
 
-    // Load allowed tools from session, with auto-recovery if missing
-    let allowed_tools = match load_tool_registry(ctx) {
-        Ok(tools) => tools,
-        Err(_) => {
-            // If NO session exists at all, allow bypass (stateless operation)
-            if ctx.session.is_none() {
-                return delegate_to_downstream(ctx, request_id, ClientRequest::ToolsCall(req))
-                    .unwrap_or_else(|| {
-                        Err(create_error(
-                            JSONRPC_METHOD_NOT_FOUND,
-                            "Method not found".to_string(),
-                        ))
-                    });
-            }
+    // Stateless: recompute the allowed tools for this request (same logic as tools/list)
+    let all_tools = fetch_tools_from_downstream(
+        ctx,
+        RequestId::Number(INTERNAL_REQUEST_ID_VALUE),
+        ListToolsRequest { cursor: None },
+    )?;
 
-            // Session exists but registry missing/corrupt - auto-recover by regenerating
-            eprintln!("Tool registry missing/corrupt - regenerating from tools/list");
+    let config = load_and_aggregate_configs(ctx).map_err(|e| {
+        create_error(
+            JSONRPC_INTERNAL_ERROR,
+            format!("Failed to load routing configs: {}", e),
+        )
+    })?;
 
-            // Fetch and filter tools (same logic as handle_tools_list)
-            let all_tools = fetch_tools_from_downstream(
-                ctx,
-                RequestId::Number(INTERNAL_REQUEST_ID_VALUE),
-                ListToolsRequest { cursor: None },
-            )?;
-
-            let config = load_and_aggregate_configs(ctx).map_err(|e| {
-                create_error(
-                    JSONRPC_INTERNAL_ERROR,
-                    format!("Failed to load routing configs: {}", e),
-                )
-            })?;
-
-            let current_path = extract_path(ctx);
-            let pipeline = FilteringPipeline::new(&config, current_path);
-            let mut filtered_tools = pipeline.apply_filters(&all_tools).into_owned();
-
-            // Include diagnostic tool in registry
-            filtered_tools.push(create_inspect_routing_tool());
-
-            // Store regenerated registry
-            store_tool_registry(ctx, &filtered_tools).map_err(|e| {
-                create_error(
-                    JSONRPC_INTERNAL_ERROR,
-                    format!("Failed to store regenerated tool registry: {}", e),
-                )
-            })?;
-
-            // Extract tool names for validation
-            filtered_tools.iter().map(|t| t.name.clone()).collect()
-        }
-    };
+    let current_path = extract_path(ctx);
+    let pipeline = FilteringPipeline::new(&config, current_path);
+    let allowed_tools: Vec<String> = pipeline
+        .apply_filters(&all_tools)
+        .iter()
+        .map(|t| t.name.clone())
+        .collect();
 
     // Validate tool is allowed
     if !allowed_tools.contains(&req.name) {

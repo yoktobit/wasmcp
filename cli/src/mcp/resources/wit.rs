@@ -44,34 +44,17 @@ pub fn list() -> Vec<Annotated<RawResource>> {
                 last_modified: None,
             }),
         },
-        Annotated {
-            raw: RawResource {
-                uri: "wasmcp://wit/sessions".into(),
-                name: "Session Management Interface".into(),
-                mime_type: Some("text/plain".into()),
-                title: None,
-                description: Some("Session management interfaces for stateful middleware components. Answers: how to implement session state, WASI KV integration. Contains: session interface definitions. Skip: for basic composition, not needed unless building stateful middleware.".into()),
-                size: None,
-                icons: None,
-            },
-            annotations: Some(Annotations {
-                audience: Some(vec![Role::Assistant]),
-                priority: Some(0.3),
-                last_modified: None,
-            }),
-        },
     ]
 }
 
-/// Read a WIT interface resource by wit path (e.g., "mcp", "server", "sessions")
+/// Read a WIT interface resource by wit path (e.g., "mcp", "server")
 pub async fn read(
     client: &reqwest::Client,
     wit_path: &str,
 ) -> Option<Result<ReadResourceResult, McpError>> {
     let path = match wit_path {
-        "mcp" => "spec/2025-06-18/wit/mcp.wit",
-        "server" => "spec/2025-06-18/wit/server.wit",
-        "sessions" => "spec/2025-06-18/wit/sessions.wit",
+        "mcp" => "spec/2026-07-28/wit/mcp.wit",
+        "server" => "spec/2026-07-28/wit/server.wit",
         _ => return None,
     };
 
@@ -86,7 +69,7 @@ pub fn list_templates() -> Vec<RawResourceTemplate> {
             name: "Branch-specific WIT Interfaces".into(),
             title: None,
             description: Some(
-                "Access WIT interfaces from specific Git branches. Available resources: mcp (protocol types and capabilities), server (handler and messages), sessions (state management)"
+                "Access WIT interfaces from specific Git branches. Available resources: mcp (protocol types and capabilities), server (handler and messages)"
                     .into(),
             ),
             mime_type: Some("text/plain".into()),

@@ -8,77 +8,45 @@
 
 use crate::bindings::wasi::http::types::ResponseOutparam;
 use crate::bindings::wasi::io::streams::OutputStream;
-use crate::bindings::wasmcp::mcp_v20251125::mcp::{
-    ClientNotification, ClientRequest, ClientResult, ErrorCode, RequestId, ServerResult,
+use crate::bindings::wasmcp::mcp_v20260728::mcp::{
+    ClientNotification, ClientRequest, ClientResult, ErrorCode, RequestId,
 };
-use crate::bindings::wasmcp::mcp_v20251125::server_handler::handle;
+use crate::bindings::wasmcp::mcp_v20260728::server_handler::handle;
+use crate::bindings::wasmcp::mcp_v20260728::server_io::RequestMeta;
 use crate::common;
-use crate::config::TransportConfig;
 use crate::error::TransportError;
 use crate::http::response;
 use crate::send_error;
 
 /// Handle MCP request message
 ///
-/// Routes requests to appropriate handlers:
-/// - Initialize: Should never reach here (handled separately)
-/// - Ping: Transport-level health check
-/// - LoggingSetLevel: Transport-level logging config
-/// - All others: Delegated to middleware
-#[allow(clippy::too_many_arguments)]
+/// - `server/discover` and `subscriptions/listen` are answered by the transport
+/// - All others are delegated to middleware
 pub fn handle_mcp_request(
     request_id: RequestId,
     client_request: ClientRequest,
-    protocol_version: String,
-    session_id: Option<&str>,
-    identity: Option<&crate::bindings::wasmcp::mcp_v20251125::mcp::Identity>,
+    meta: &RequestMeta,
+    identity: Option<&crate::bindings::wasmcp::mcp_v20260728::mcp::Identity>,
     output_stream: &OutputStream,
     frame: &common::MessageFrame,
-    config: &TransportConfig,
-    http_context: Option<crate::bindings::wasmcp::mcp_v20251125::server_auth::HttpContext>,
+    http_context: Option<crate::bindings::wasmcp::mcp_v20260728::server_auth::HttpContext>,
 ) -> Result<(), TransportError> {
-    // Parse protocol version
-    let proto_ver =
-        common::parse_protocol_version(&protocol_version).map_err(TransportError::protocol)?;
-
-    // Handle based on request type
     match client_request {
-        ClientRequest::Initialize(_) => {
-            eprintln!("[TRANSPORT-MCP] ERROR: Initialize should never reach here");
-            // Should never reach here - initialize is handled separately
-            Err(TransportError::internal(
-                "Initialize must be handled before SSE response setup",
-            ))
-        }
-        ClientRequest::Ping(_) => {
-            common::handle_ping()
-                .map_err(|e| TransportError::protocol(format!("Ping failed: {:?}", e)))?;
-            common::write_mcp_result(output_stream, request_id, ServerResult::Ping, frame)?;
+        ClientRequest::Discover => {
+            let result = common::handle_discover(frame);
+            common::write_mcp_result(output_stream, request_id, result, frame)?;
             Ok(())
         }
-        ClientRequest::LoggingSetLevel(level) => {
-            let level_str = common::log_level_to_string(level);
-            common::handle_set_log_level(level_str)
-                .map_err(|e| TransportError::protocol(format!("SetLevel failed: {:?}", e)))?;
-            common::write_mcp_result(
-                output_stream,
-                request_id,
-                ServerResult::LoggingSetLevel,
-                frame,
-            )?;
+        ClientRequest::SubscriptionsListen(_) => {
+            common::acknowledge_subscriptions(output_stream, &request_id, frame)?;
             Ok(())
         }
         _ => {
-            let bucket = config.get_session_bucket().to_string();
-
-            // Delegate all other methods to middleware
             let result = common::delegate_to_middleware(
                 request_id.clone(),
                 client_request,
-                proto_ver,
-                session_id,
+                meta,
                 identity,
-                bucket,
                 output_stream,
                 frame,
                 http_context,
@@ -87,7 +55,6 @@ pub fn handle_mcp_request(
                 TransportError::protocol(format!("Middleware delegation failed: {:?}", e))
             })?;
 
-            // Write result via server-io (handles SSE formatting)
             common::write_mcp_result(output_stream, request_id, result, frame)?;
             Ok(())
         }
@@ -100,23 +67,12 @@ pub fn handle_mcp_request(
 /// Delegates to middleware for processing.
 pub fn handle_mcp_notification(
     client_notification: ClientNotification,
-    protocol_version: String,
-    session_id: Option<&str>,
-    config: &TransportConfig,
-    http_context: Option<crate::bindings::wasmcp::mcp_v20251125::server_auth::HttpContext>,
+    meta: &RequestMeta,
+    http_context: Option<crate::bindings::wasmcp::mcp_v20260728::server_auth::HttpContext>,
 ) -> Result<(), TransportError> {
-    // Parse protocol version
-    let proto_ver =
-        common::parse_protocol_version(&protocol_version).map_err(TransportError::protocol)?;
-
-    let bucket = config.get_session_bucket().to_string();
-
-    // Delegate to middleware via notification context
     common::delegate_notification(
         client_notification,
-        proto_ver,
-        session_id,
-        bucket,
+        meta,
         &common::plain_json_frame(),
         http_context,
     )
@@ -131,27 +87,13 @@ pub fn handle_mcp_notification(
 pub fn handle_mcp_result(
     result_id: RequestId,
     client_result: ClientResult,
-    protocol_version: String,
-    session_id: Option<&str>,
-    session_config: &TransportConfig,
+    meta: &RequestMeta,
 ) -> Result<(), TransportError> {
-    // Parse protocol version
-    let proto_ver =
-        common::parse_protocol_version(&protocol_version).map_err(TransportError::protocol)?;
-
     // Create message context (no client-stream for results - client sending to server)
-    let ctx = common::create_message_context(
-        None,
-        proto_ver,
-        session_id,
-        None,
-        session_config.get_session_bucket(),
-        &common::plain_json_frame(),
-        None, // HTTP context not available for results
-    );
+    let ctx = common::create_message_context(None, meta, None, &common::plain_json_frame(), None);
 
     // Create client message
-    let message = crate::bindings::wasmcp::mcp_v20251125::mcp::ClientMessage::Result((
+    let message = crate::bindings::wasmcp::mcp_v20260728::mcp::ClientMessage::Result((
         result_id,
         client_result,
     ));
@@ -167,28 +109,14 @@ pub fn handle_mcp_result(
 pub fn handle_mcp_error(
     error_id: Option<RequestId>,
     error_code: ErrorCode,
-    protocol_version: String,
-    session_id: Option<&str>,
-    session_config: &TransportConfig,
+    meta: &RequestMeta,
 ) -> Result<(), TransportError> {
-    // Parse protocol version
-    let proto_ver =
-        common::parse_protocol_version(&protocol_version).map_err(TransportError::protocol)?;
-
     // Create message context (no client-stream for errors - client sending to server)
-    let ctx = common::create_message_context(
-        None,
-        proto_ver,
-        session_id,
-        None,
-        session_config.get_session_bucket(),
-        &common::plain_json_frame(),
-        None, // HTTP context not available for errors
-    );
+    let ctx = common::create_message_context(None, meta, None, &common::plain_json_frame(), None);
 
     // Create client message
     let message =
-        crate::bindings::wasmcp::mcp_v20251125::mcp::ClientMessage::Error((error_id, error_code));
+        crate::bindings::wasmcp::mcp_v20260728::mcp::ClientMessage::Error((error_id, error_code));
 
     // Delegate to imported server-handler (should return None for errors from client)
     handle(&ctx, message);

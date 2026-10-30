@@ -9,9 +9,9 @@ mod bindings {
     });
 }
 
-use bindings::exports::wasmcp::mcp_v20251125::resources::Guest;
-use bindings::wasmcp::mcp_v20251125::mcp::*;
-use bindings::wasmcp::mcp_v20251125::server_handler::MessageContext;
+use bindings::exports::wasmcp::mcp_v20260728::resources::Guest;
+use bindings::wasmcp::mcp_v20260728::mcp::*;
+use bindings::wasmcp::mcp_v20260728::server_handler::MessageContext;
 
 struct TextResources;
 
@@ -50,6 +50,7 @@ impl Guest for TextResources {
                 },
             ],
             next_cursor: None,
+            cache: None,
             meta: None,
         })
     }
@@ -76,6 +77,7 @@ impl Guest for TextResources {
         Ok(ListResourceTemplatesResult {
             resource_templates: vec![],
             next_cursor: None,
+            cache: None,
             meta: None,
         })
     }
@@ -83,6 +85,7 @@ impl Guest for TextResources {
 
 fn success_result(text: &str) -> ReadResourceResult {
     ReadResourceResult {
+        cache: None,
         contents: vec![ResourceContents::Text(TextResourceContents {
             uri: String::new(), // URI is provided in request
             text: TextData::Text(text.to_string()),

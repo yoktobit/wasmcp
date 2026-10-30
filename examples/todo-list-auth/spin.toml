@@ -20,8 +20,7 @@ key_value_stores = ["default"]
 
 [component.todo-list-auth.environment]
 WASMCP_AUTH_MODE = "oauth"
-WASMCP_SESSION_ENABLED = "true"
-WASMCP_SESSION_BUCKET = "default"  # KV bucket for session storage
+WASMCP_KV_BUCKET = "default"  # KV bucket
 JWT_ISSUER = "wasmcp-local-test"
 JWT_AUDIENCE = "http://localhost:3000"
 JWT_PUBLIC_KEY = "{{ jwt_public_key }}"
@@ -38,7 +37,7 @@ jwt_public_key = { default = "" }
 #   export JWT_PUBLIC_KEY="$(cat ~/.wasmcp/jwt-test/public.pem)"
 #   spin up -e JWT_PUBLIC_KEY="$JWT_PUBLIC_KEY"
 #
-# All other settings (JWT_ISSUER, WASMCP_SESSION_ENABLED, etc.) are
+# All other settings (JWT_ISSUER, WASMCP_KV_BUCKET, etc.) are
 # pre-configured in the component.todo-list-auth.environment section above.
 #
 # ============================================================================

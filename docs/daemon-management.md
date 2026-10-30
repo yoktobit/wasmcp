@@ -139,7 +139,7 @@ wasmcp mcp status
 **Health Check:**
 The status command performs a full MCP protocol handshake:
 1. Connects to the server via HTTP
-2. Sends `initialize` request
+2. Sends a `server/discover` request
 3. Calls `tools/list` and `resources/list`
 4. Validates responses and counts available tools/resources
 

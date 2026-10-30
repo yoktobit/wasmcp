@@ -3,12 +3,13 @@
 //! This module handles conversion from WIT types to JSON-RPC 2.0 format
 //! with support for both HTTP (SSE) and stdio (newline-delimited) transports.
 
-use crate::bindings::wasmcp::mcp_v20251125::mcp::{
+use crate::bindings::wasmcp::mcp_v20260728::mcp::{
     Annotations, BlobData, CallToolResult, CompleteResult, ContentBlock, ErrorCode,
-    GetPromptResult, Implementation, InitializeResult, ListPromptsResult,
+    DiscoverResult, GetPromptResult, Implementation, InputRequest, InputRequiredResult,
+    ListPromptsResult,
     ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, McpResource, Prompt,
     PromptMessage, ProtocolVersion, ReadResourceResult, RequestId, ResourceContents,
-    ResourceTemplate, Role, ServerCapabilities, ServerResult, TextData, Tool,
+    ResourceTemplate, Role, CacheScope, ServerCapabilities, ServerResult, TextData, Tool,
 };
 use crate::stream_reader::{StreamConfig, read_blob_stream, read_text_stream};
 use serde::{Deserialize, Serialize};
@@ -37,8 +38,8 @@ impl From<&RequestId> for JsonRequestId {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct JsonInitializeResult {
-    protocol_version: String,
+struct JsonDiscoverResult {
+    supported_versions: Vec<String>,
     capabilities: JsonServerCapabilities,
     server_info: JsonImplementation,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,7 +52,9 @@ struct JsonServerCapabilities {
     #[serde(skip_serializing_if = "Option::is_none")]
     completions: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    experimental: Option<Vec<(String, Value)>>,
+    experimental: Option<serde_json::Map<String, Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    extensions: Option<serde_json::Map<String, Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     logging: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -327,6 +330,7 @@ struct JsonCompleteResult {
 
 fn protocol_version_to_string(version: &ProtocolVersion) -> String {
     match version {
+        ProtocolVersion::V20260728 => "2026-07-28".to_string(),
         ProtocolVersion::V20251125 => "2025-11-25".to_string(),
         ProtocolVersion::V20250618 => "2025-06-18".to_string(),
         ProtocolVersion::V20250326 => "2025-03-26".to_string(),
@@ -334,19 +338,23 @@ fn protocol_version_to_string(version: &ProtocolVersion) -> String {
     }
 }
 
+fn pairs_to_json_map(pairs: &[(String, String)]) -> serde_json::Map<String, Value> {
+    pairs
+        .iter()
+        .filter_map(|(k, v)| serde_json::from_str(v).ok().map(|val| (k.clone(), val)))
+        .collect()
+}
+
 fn convert_server_capabilities(caps: &ServerCapabilities) -> JsonServerCapabilities {
-    use crate::bindings::wasmcp::mcp_v20251125::mcp::{ServerLists, ServerSubscriptions};
+    use crate::bindings::wasmcp::mcp_v20260728::mcp::{ServerLists, ServerSubscriptions};
 
     JsonServerCapabilities {
         completions: caps
             .completions
             .as_ref()
             .and_then(|s| serde_json::from_str(s).ok()),
-        experimental: caps.experimental.as_ref().map(|exp| {
-            exp.iter()
-                .filter_map(|(k, v)| serde_json::from_str(v).ok().map(|val| (k.clone(), val)))
-                .collect()
-        }),
+        experimental: caps.experimental.as_deref().map(pairs_to_json_map),
+        extensions: caps.extensions.as_deref().map(pairs_to_json_map),
         logging: caps
             .logging
             .as_ref()
@@ -396,13 +404,44 @@ fn convert_implementation(impl_info: &Implementation) -> JsonImplementation {
     }
 }
 
-fn convert_initialize_result(result: &InitializeResult) -> JsonInitializeResult {
-    JsonInitializeResult {
-        protocol_version: protocol_version_to_string(&result.protocol_version),
+fn convert_discover_result(result: &DiscoverResult) -> JsonDiscoverResult {
+    JsonDiscoverResult {
+        supported_versions: result
+            .supported_versions
+            .iter()
+            .map(protocol_version_to_string)
+            .collect(),
         capabilities: convert_server_capabilities(&result.capabilities),
         server_info: convert_implementation(&result.server_info),
-        instructions: result.options.as_ref().and_then(|o| o.instructions.clone()),
+        instructions: result.instructions.clone(),
     }
+}
+
+fn convert_input_required_result(result: &InputRequiredResult) -> Value {
+    let mut obj = serde_json::Map::new();
+    obj.insert("resultType".to_string(), json!("input_required"));
+    if let Some(requests) = &result.input_requests {
+        let map: serde_json::Map<String, Value> = requests
+            .iter()
+            .map(|(key, request)| {
+                let (method, params) =
+                    crate::serialization::requests::serialize_input_request(request);
+                (key.clone(), json!({ "method": method, "params": params }))
+            })
+            .collect();
+        obj.insert("inputRequests".to_string(), Value::Object(map));
+    }
+    if let Some(state) = &result.request_state {
+        obj.insert("requestState".to_string(), json!(state));
+    }
+    if let Some(meta) = result
+        .meta
+        .as_ref()
+        .and_then(|m| serde_json::from_str::<Value>(m).ok())
+    {
+        obj.insert("_meta".to_string(), meta);
+    }
+    Value::Object(obj)
 }
 
 fn role_to_string(role: &Role) -> String {
@@ -677,7 +716,7 @@ pub fn convert_content_block(block: &ContentBlock) -> Result<JsonContentBlock, S
             mime_type: link.options.as_ref().and_then(|o| o.mime_type.clone()),
         })),
         ContentBlock::EmbeddedResource(embedded) => {
-            use crate::bindings::wasmcp::mcp_v20251125::mcp::ResourceContents;
+            use crate::bindings::wasmcp::mcp_v20260728::mcp::ResourceContents;
             match &embedded.resource {
                 ResourceContents::Text(text_res) => {
                     let text = convert_text_data(&text_res.text)?;
@@ -739,18 +778,48 @@ pub fn serialize_jsonrpc_response(
 /// Handles all MCP server response types with proper error propagation.
 /// Stream data is read with bounded memory via the streaming infrastructure.
 pub fn serialize_server_response(response: &ServerResult) -> Value {
-    match response {
-        // Empty success responses
-        ServerResult::Ping => json!({}),
-        ServerResult::LoggingSetLevel => json!({}),
+    let mut value = serialize_result_body(response);
 
-        ServerResult::Initialize(init_result) => {
-            serde_json::to_value(convert_initialize_result(init_result)).unwrap_or_else(|e| {
+    // Every result carries resultType; cacheable results also carry ttlMs and cacheScope
+    if let Value::Object(map) = &mut value {
+        map.entry("resultType").or_insert(json!("complete"));
+
+        let cache = match response {
+            ServerResult::ToolsList(r) => Some(&r.cache),
+            ServerResult::ResourcesList(r) => Some(&r.cache),
+            ServerResult::ResourcesRead(r) => Some(&r.cache),
+            ServerResult::ResourcesTemplatesList(r) => Some(&r.cache),
+            ServerResult::PromptsList(r) => Some(&r.cache),
+            _ => None,
+        };
+        if let Some(cache) = cache {
+            let (ttl_ms, scope) = match cache {
+                Some(c) => (
+                    c.ttl_ms,
+                    match c.cache_scope {
+                        CacheScope::Public => "public",
+                        CacheScope::Private => "private",
+                    },
+                ),
+                None => (0, "private"),
+            };
+            map.insert("ttlMs".to_string(), json!(ttl_ms));
+            map.insert("cacheScope".to_string(), json!(scope));
+        }
+    }
+    value
+}
+
+fn serialize_result_body(response: &ServerResult) -> Value {
+    match response {
+        ServerResult::Discover(discover_result) => {
+            serde_json::to_value(convert_discover_result(discover_result)).unwrap_or_else(|e| {
                 json!({
-                    "error": format!("Failed to serialize initialize result: {}", e)
+                    "error": format!("Failed to serialize discover result: {}", e)
                 })
             })
         }
+        ServerResult::InputRequired(input_required) => convert_input_required_result(input_required),
         ServerResult::ToolsList(tools_result) => match convert_list_tools_result(tools_result) {
             Ok(json_result) => serde_json::to_value(json_result).unwrap_or_else(|e| {
                 json!({

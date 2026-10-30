@@ -96,21 +96,14 @@ The test script validates all filtering patterns:
 make compose
 spin up
 
-# In another terminal, initialize session
+# In another terminal, list tools at /mcp/math (the protocol is stateless: no initialize/session)
 TOKEN=$(wasmcp jwt load-token admin)
-SESSION_ID=$(curl -s -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -D - \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' \
-  http://localhost:3000/mcp/math | grep -i mcp-session-id | cut -d' ' -f2 | tr -d '\r')
-
-# List tools at /mcp/math path
 curl -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Mcp-Session-Id: $SESSION_ID" \
+  -H "Authorization: ******" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: tools/list" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
   http://localhost:3000/mcp/math
 
 # Try different paths to see different tool sets

@@ -123,18 +123,18 @@ impl VersionResolver {
 
     /// Get all valid component names (from versions.toml)
     ///
-    /// Returns component names only, excluding WIT packages like mcp-v20251125
+    /// Returns component names only, excluding WIT packages like mcp-v20260728
     pub fn get_component_names(&self) -> Vec<String> {
         self.versions
             .keys()
-            .filter(|name| !name.contains("v202") && *name != "mcp-v20251125")
+            .filter(|name| !name.contains("v202") && *name != "mcp-v20260728")
             .cloned()
             .collect()
     }
 
     /// Check if a component name is valid
     pub fn is_valid_component(&self, name: &str) -> bool {
-        self.versions.contains_key(name) && !name.contains("v202") && name != "mcp-v20251125"
+        self.versions.contains_key(name) && !name.contains("v202") && name != "mcp-v20260728"
     }
 
     /// Get comma-separated list of valid component names
@@ -147,11 +147,11 @@ impl VersionResolver {
     /// Get all framework component names (excludes spec versions)
     ///
     /// Returns all components from versions.toml that are actual framework components,
-    /// not WIT package specs like mcp-v20251125.
+    /// not WIT package specs like mcp-v20260728.
     pub fn framework_components(&self) -> Vec<&str> {
         self.versions
             .keys()
-            .filter(|name| !name.contains("v202") && name.as_str() != "mcp-v20251125")
+            .filter(|name| !name.contains("v202") && name.as_str() != "mcp-v20260728")
             .map(|s| s.as_str())
             .collect()
     }
@@ -200,7 +200,7 @@ mod tests {
         let resolver = VersionResolver::new().unwrap();
 
         // Should have default versions
-        assert!(resolver.get_version("mcp-v20251125").is_ok());
+        assert!(resolver.get_version("mcp-v20260728").is_ok());
         assert!(resolver.get_version("transport").is_ok());
     }
 
@@ -281,7 +281,7 @@ mod tests {
         assert!(components.contains(&"method-not-found"));
 
         // Should exclude spec versions
-        assert!(!components.contains(&"mcp-v20251125"));
+        assert!(!components.contains(&"mcp-v20260728"));
         assert!(!components.iter().any(|c| c.contains("v202")));
     }
 
@@ -294,7 +294,6 @@ mod tests {
         assert!(services.contains(&"server-io"));
         assert!(services.contains(&"authorization"));
         assert!(services.contains(&"kv-store"));
-        assert!(services.contains(&"session-store"));
 
         // Should exclude structural components
         assert!(!services.contains(&"transport"));

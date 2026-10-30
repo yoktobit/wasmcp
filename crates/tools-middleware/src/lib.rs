@@ -16,10 +16,10 @@ mod bindings {
     });
 }
 
-use bindings::exports::wasmcp::mcp_v20251125::server_handler::{Guest, MessageContext};
-use bindings::wasmcp::mcp_v20251125::mcp::*;
-use bindings::wasmcp::mcp_v20251125::server_handler as downstream;
-use bindings::wasmcp::mcp_v20251125::tools;
+use bindings::exports::wasmcp::mcp_v20260728::server_handler::{Guest, MessageContext};
+use bindings::wasmcp::mcp_v20260728::mcp::*;
+use bindings::wasmcp::mcp_v20260728::server_handler as downstream;
+use bindings::wasmcp::mcp_v20260728::tools;
 
 struct ToolsMiddleware;
 
@@ -28,10 +28,9 @@ fn to_downstream_ctx<'a>(ctx: &'a MessageContext<'a>) -> downstream::MessageCont
     downstream::MessageContext {
         client_stream: ctx.client_stream,
         protocol_version: ctx.protocol_version.clone(),
-        session: ctx.session.as_ref().map(|s| downstream::Session {
-            session_id: s.session_id.clone(),
-            store_id: s.store_id.clone(),
-        }),
+        client_capabilities: ctx.client_capabilities.clone(),
+        client_info: ctx.client_info.clone(),
+        log_level: ctx.log_level,
         identity: ctx.identity.as_ref().map(|i| downstream::Identity {
             jwt: i.jwt.clone(),
             claims: i.claims.clone(),
@@ -49,16 +48,16 @@ impl Guest for ToolsMiddleware {
         match message {
             ClientMessage::Request((request_id, request)) => {
                 // Handle requests - match on request type
-                let result = match &request {
+                let result = match request {
                     ClientRequest::ToolsList(list_req) => {
-                        handle_tools_list(request_id.clone(), list_req.clone(), &ctx)
+                        handle_tools_list(request_id, list_req, &ctx)
                     }
                     ClientRequest::ToolsCall(call_req) => {
-                        handle_tools_call(request_id.clone(), call_req.clone(), &ctx)
+                        handle_tools_call(request_id, call_req, &ctx)
                     }
-                    _ => {
+                    other => {
                         // Delegate all other requests to downstream handler
-                        let downstream_msg = ClientMessage::Request((request_id.clone(), request));
+                        let downstream_msg = ClientMessage::Request((request_id.clone(), other));
                         return downstream::handle(&to_downstream_ctx(&ctx), downstream_msg);
                     }
                 };
@@ -106,6 +105,7 @@ fn handle_tools_list(
                         tools: all_tools,
                         next_cursor: downstream_result.next_cursor.or(our.next_cursor),
                         meta: our.meta.or(downstream_result.meta),
+                        cache: our.cache.or(downstream_result.cache),
                     }))
                 }
                 None => {
@@ -174,6 +174,7 @@ fn handle_tools_call(
     req: CallToolRequest,
     ctx: &MessageContext,
 ) -> Result<ServerResult, ErrorCode> {
+    let name = req.name.clone();
     // Try calling imported tools interface first
     match tools::call_tool(&to_downstream_ctx(ctx), &req) {
         Ok(Some(result)) => {
@@ -183,7 +184,7 @@ fn handle_tools_call(
         Ok(None) => {
             // Imported interface doesn't handle this tool - try downstream
             // Preserve the original request ID
-            let downstream_req = ClientRequest::ToolsCall(req.clone());
+            let downstream_req = ClientRequest::ToolsCall(req);
             let downstream_msg = ClientMessage::Request((request_id, downstream_req));
             match downstream::handle(&to_downstream_ctx(ctx), downstream_msg) {
                 Some(Ok(response)) => Ok(response),
@@ -192,7 +193,7 @@ fn handle_tools_call(
                     // The method exists, but the tool name parameter is invalid
                     Err(ErrorCode::InvalidParams(Error {
                         code: -32602,
-                        message: format!("Unknown tool: {}", req.name),
+                        message: format!("Unknown tool: {}", name),
                         data: None,
                     }))
                 }

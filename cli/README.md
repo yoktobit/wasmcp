@@ -216,7 +216,6 @@ The server provides read-only access to:
 **WIT Interfaces** (fetched from GitHub):
 - `wasmcp://wit/mcp` - Complete MCP protocol types and capability interfaces
 - `wasmcp://wit/server` - Server interfaces (handler and messages)
-- `wasmcp://wit/sessions` - Session management interfaces
 
 **Registry** (from local configuration):
 - `wasmcp://registry/components` - Component aliases (JSON)
@@ -381,7 +380,6 @@ wasmcp compose server component.wasm \
 - `server-io` - Server I/O interface implementation
 - `authorization` - Authorization/authentication handler
 - `kv-store` - Key-value storage interface
-- `session-store` - Session management
 - `method-not-found` - Terminal handler for unknown methods
 - `tools-middleware` - Tools capability middleware
 - `resources-middleware` - Resources capability middleware

@@ -93,11 +93,9 @@ done
 echo -e "${GREEN}✓ MCP server is running at http://localhost:3000/mcp${NC}"
 echo ""
 
-# Session storage for Mcp-Session-Id header
-SESSION_ID=""
 REQUEST_ID=1
 
-# Function to verify tools/list filtering (requires initialized session)
+# Function to verify tools/list filtering 
 verify_tools_list() {
     local token_name="$1"
     local expected_tool_count="$2"
@@ -112,16 +110,12 @@ verify_tools_list() {
         return 1
     fi
 
-    # Build headers (include session ID if available)
-    local headers="-H \"Authorization: Bearer $token\" -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\""
-    if [ -n "$SESSION_ID" ]; then
-        headers="$headers -H \"Mcp-Session-Id: $SESSION_ID\""
-    fi
-
+    # Build headers
+    local headers="-H \"Authorization: Bearer $token\" -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -H \"MCP-Protocol-Version: 2026-07-28\" -H \"Mcp-Method: tools/list\""
     # Send tools/list request
     local list_response=$(eval curl -s -X POST \
         $headers \
-        -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/list\",\"params\":{}}'" \
+        -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/list\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}}}'" \
         http://localhost:3000/mcp)
 
     REQUEST_ID=$((REQUEST_ID + 1))
@@ -146,51 +140,7 @@ verify_tools_list() {
     echo ""
 }
 
-# Initialize MCP session with a specific token
-initialize_session() {
-    local token_name="$1"
-
-    echo -e "${BLUE}Initializing MCP session with token: $token_name${NC}"
-
-    # Load token
-    local token=$($WASMCP_CLI jwt load-token "$token_name" 2>/dev/null)
-    if [ -z "$token" ]; then
-        echo -e "${RED}  ✗ Failed to load token '$token_name'${NC}"
-        return 1
-    fi
-
-    # Send initialize request
-    local init_response=$(curl -s -X POST \
-        -H "Authorization: Bearer $token" \
-        -H "Content-Type: application/json" \
-        -H "Accept: application/json, text/event-stream" \
-        -D /tmp/init_headers_$$.txt \
-        -d '{"jsonrpc":"2.0","id":'$REQUEST_ID',"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"todo-list-auth-test","version":"1.0.0"}}}' \
-        http://localhost:3000/mcp)
-
-    REQUEST_ID=$((REQUEST_ID + 1))
-
-    # Extract session ID from Mcp-Session-Id header
-    if [ -f /tmp/init_headers_$$.txt ]; then
-        SESSION_ID=$(grep -i "^Mcp-Session-Id:" /tmp/init_headers_$$.txt | cut -d' ' -f2 | tr -d '\r\n')
-        rm -f /tmp/init_headers_$$.txt
-    fi
-
-    # Check if initialization succeeded
-    if echo "$init_response" | grep -q '"result"'; then
-        echo -e "${GREEN}  ✓ Session initialized${NC}"
-        if [ -n "$SESSION_ID" ]; then
-            echo -e "${GREEN}    Session ID: $SESSION_ID${NC}"
-        fi
-        return 0
-    else
-        echo -e "${RED}  ✗ Initialization failed${NC}"
-        echo "    Response: $init_response"
-        return 1
-    fi
-}
-
-# Function to call a tool with the current session
+# Function to call a tool 
 call_tool() {
     local token_name="$1"
     local tool_name="$2"
@@ -208,14 +158,10 @@ call_tool() {
 
     # Build headers
     local headers="-H \"Authorization: Bearer $token\" -H \"Content-Type: application/json\""
-    if [ -n "$SESSION_ID" ]; then
-        headers="$headers -H \"Mcp-Session-Id: $SESSION_ID\""
-    fi
-
     # Make JSON-RPC request to call the tool
     local response=$(eval curl -s -X POST \
         $headers \
-        -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool_name\",\"arguments\":$args}}'" \
+        -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool_name\",\"arguments\":$args,\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}}}'" \
         http://localhost:3000/mcp)
 
     REQUEST_ID=$((REQUEST_ID + 1))
@@ -255,10 +201,7 @@ echo "Token: admin"
 echo "Claims: scope=\"mcp:read mcp:write\", role=\"admin\""
 echo ""
 
-# Initialize session
-initialize_session "admin" || exit 1
-
-# Verify tools list filtering (after session initialization)
+# Verify tools list filtering
 verify_tools_list "admin" 4 "Admin sees all 4 tools"
 echo ""
 
@@ -279,10 +222,8 @@ echo "Token: readonly"
 echo "Claims: scope=\"mcp:read\", role=\"viewer\""
 echo ""
 
-# Initialize new session for readonly user
-initialize_session "readonly" || exit 1
 
-# Verify tools list filtering (after session initialization)
+# Verify tools list filtering
 verify_tools_list "readonly" 1 "Readonly sees only 1 tool (list_items)"
 echo ""
 
@@ -304,10 +245,8 @@ echo "Token: analyst"
 echo "Claims: scope=\"mcp:read mcp:write\", allowed_tools=\"add_item,list_items\""
 echo ""
 
-# Initialize new session for analyst user
-initialize_session "analyst" || exit 1
 
-# Verify tools list filtering (after session initialization)
+# Verify tools list filtering
 verify_tools_list "analyst" 2 "Analyst sees only 2 tools (add_item, list_items)"
 echo ""
 

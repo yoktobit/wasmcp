@@ -97,10 +97,10 @@ wasmtime serve -Scli -Skeyvalue -Shttp server.wasm
 
 ## Features
 
-- **Stateful Sessions** - Built-in session management with key-value storage for multi-request workflows
+- **Stateless Protocol** - MCP 2026-07-28 (no sessions), with key-value storage for state shared across requests
 - **Authentication** - JWT/OAuth bearer token validation with scope-based authorization
 - **Auto-Composition** - Automatically wraps components with appropriate middleware
-- **Type-Safe Storage** - TypedValue enum for runtime type safety in sessions
+- **Type-Safe Storage** - TypedValue enum for runtime type safety in key-value storage
 - **Real-time Notifications** - Progress updates, logs, and resource changes via streaming
 
 ## Why?
@@ -111,7 +111,7 @@ WebAssembly components are:
 - **Distributable** - Push/pull components from OCI registries
 - **Lean** - Complete servers can be under 1MB
 
-These qualities are a perfect match for MCP's [server design principals](https://modelcontextprotocol.io/specification/2025-06-18/architecture#design-principles).
+These qualities are a perfect match for MCP's [server design principals](https://modelcontextprotocol.io/specification/2026-07-28/architecture#design-principles).
 
 > 1. Servers should be extremely easy to build
 > 2. Servers should be highly composable
@@ -120,7 +120,7 @@ These qualities are a perfect match for MCP's [server design principals](https:/
 
 ## Architecture
 
-Server features like tools, resources, prompts, and completions, are implemented by individual WebAssembly components that export the narrow, spec-mapped WIT interfaces defined in [spec/2025-06-18/wit/](spec/2025-06-18/wit/).
+Server features like tools, resources, prompts, and completions, are implemented by individual WebAssembly components that export the narrow, spec-mapped WIT interfaces defined in [spec/2026-07-28/wit/](spec/2026-07-28/wit/).
 
 `wasmcp compose` wraps these components with published middleware components from [crates/](crates/) and composes them together behind a transport component as a complete middleware [chain of responsibility](https://en.wikipedia.org/wiki/Chain-of-responsibility_pattern) that implements an MCP server. The chain terminates with [crates/method-not-found](crates/method-not-found), which returns errors for unhandled methods.
 
@@ -261,7 +261,6 @@ Published to [ghcr.io/wasmcp](https://github.com/orgs/wasmcp/packages):
 
 - **transport** - Universal transport for HTTP / stdio execution with JWT validation
 - **server-io** - Universal MCP message I/O with configurable transport framing support
-- **session-store** - Stateful session management with key-value storage
 - **authorization** - JWT/OAuth bearer token validation and claim extraction
 - **kv-store** - Type-safe key-value storage with TypedValue support
 - **method-not-found** - Terminal handler for unhandled methods

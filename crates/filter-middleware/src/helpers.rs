@@ -1,16 +1,15 @@
-use crate::bindings::exports::wasmcp::mcp_v20251125::server_handler::MessageContext;
-use crate::bindings::wasmcp::mcp_v20251125::mcp::*;
-use crate::bindings::wasmcp::mcp_v20251125::server_handler as downstream;
+use crate::bindings::exports::wasmcp::mcp_v20260728::server_handler::MessageContext;
+use crate::bindings::wasmcp::mcp_v20260728::mcp::*;
+use crate::bindings::wasmcp::mcp_v20260728::server_handler as downstream;
 
 /// Convert exported MessageContext to imported MessageContext
 pub fn to_downstream_ctx<'a>(ctx: &'a MessageContext<'a>) -> downstream::MessageContext<'a> {
     downstream::MessageContext {
         client_stream: ctx.client_stream,
         protocol_version: ctx.protocol_version.clone(),
-        session: ctx.session.as_ref().map(|s| downstream::Session {
-            session_id: s.session_id.clone(),
-            store_id: s.store_id.clone(),
-        }),
+        client_capabilities: ctx.client_capabilities.clone(),
+        client_info: ctx.client_info.clone(),
+        log_level: ctx.log_level,
         identity: ctx.identity.as_ref().map(|i| downstream::Identity {
             jwt: i.jwt.clone(),
             claims: i.claims.clone(),

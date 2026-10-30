@@ -13,8 +13,8 @@
 //! - role=admin claim: remove_item, clear_all (delete operations)
 //!
 //! State management:
-//! - Uses session storage to persist todo items across requests
-//! - Each session maintains its own todo list
+//! - Uses key-value storage to persist todo items across requests
+//! - Each todos maintains its own todo list
 
 mod bindings {
     wit_bindgen::generate!({
@@ -23,12 +23,12 @@ mod bindings {
     });
 }
 
-use bindings::exports::wasmcp::mcp_v20251125::tools::Guest;
+use bindings::exports::wasmcp::mcp_v20260728::tools::Guest;
 use bindings::wasmcp::auth::types::JwtClaims;
 use bindings::wasmcp::keyvalue::store::TypedValue;
-use bindings::wasmcp::mcp_v20251125::mcp::*;
-use bindings::wasmcp::mcp_v20251125::server_handler::MessageContext;
-use bindings::wasmcp::mcp_v20251125::sessions::Session;
+use bindings::wasmcp::mcp_v20260728::mcp::*;
+use bindings::wasmcp::mcp_v20260728::server_handler::MessageContext;
+use bindings::wasmcp::keyvalue::store::{self as kv, Bucket};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -137,6 +137,7 @@ impl Guest for TodoListAuth {
         Ok(ListToolsResult {
             tools: filtered_tools,
             next_cursor: None,
+            cache: None,
             meta: None,
         })
     }
@@ -304,45 +305,43 @@ fn auth_error(tool_name: &str, message: &str) -> CallToolResult {
     }
 }
 
-/// Helper to get session from context
-fn get_session(ctx: &MessageContext) -> Option<Session> {
-    ctx.session
-        .as_ref()
-        .and_then(|info| Session::open(&info.session_id, &info.store_id).ok())
+/// Open the shared todo bucket (the protocol is stateless, so the list is global)
+fn get_todos(_ctx: &MessageContext) -> Option<Bucket> {
+    kv::open("todos").ok()
 }
 
-/// Load todo list from session storage
-fn load_todo_list(session: &Session) -> Vec<TodoItem> {
-    match session.get("todo:list") {
+/// Load todo list from key-value storage
+fn load_todo_list(todos: &Bucket) -> Vec<TodoItem> {
+    match todos.get("todo:list") {
         Ok(Some(TypedValue::AsBytes(bytes))) => serde_json::from_slice(&bytes).unwrap_or_default(),
         _ => Vec::new(),
     }
 }
 
-/// Save todo list to session storage
-fn save_todo_list(session: &Session, list: &[TodoItem]) {
+/// Save todo list to key-value storage
+fn save_todo_list(todos: &Bucket, list: &[TodoItem]) {
     if let Ok(json_bytes) = serde_json::to_vec(list) {
-        let _ = session.set("todo:list", &TypedValue::AsBytes(json_bytes));
+        let _ = todos.set("todo:list", &TypedValue::AsBytes(json_bytes));
     }
 }
 
-/// Get next ID from session storage
-fn get_next_id(session: &Session) -> usize {
-    match session.get("todo:next_id") {
+/// Get next ID from key-value storage
+fn get_next_id(todos: &Bucket) -> usize {
+    match todos.get("todo:next_id") {
         Ok(Some(TypedValue::AsString(id_str))) => id_str.parse().unwrap_or(1),
         _ => 1,
     }
 }
 
-/// Save next ID to session storage
-fn save_next_id(session: &Session, id: usize) {
+/// Save next ID to key-value storage
+fn save_next_id(todos: &Bucket, id: usize) {
     let id_str = id.to_string();
-    let _ = session.set("todo:next_id", &TypedValue::AsString(id_str));
+    let _ = todos.set("todo:next_id", &TypedValue::AsString(id_str));
 }
 
 fn execute_add_item(ctx: &MessageContext, arguments: &Option<String>, user: &str) -> CallToolResult {
-    let Some(session) = get_session(ctx) else {
-        return error_result("No session available".to_string());
+    let Some(todos) = get_todos(ctx) else {
+        return error_result("Key-value store unavailable".to_string());
     };
 
     let args_str = match arguments.as_ref() {
@@ -360,9 +359,9 @@ fn execute_add_item(ctx: &MessageContext, arguments: &Option<String>, user: &str
         None => return error_result("Missing or invalid parameter 'title'".to_string()),
     };
 
-    // Load current state from session
-    let mut list = load_todo_list(&session);
-    let id = get_next_id(&session);
+    // Load current state from storage
+    let mut list = load_todo_list(&todos);
+    let id = get_next_id(&todos);
 
     // Add new item
     list.push(TodoItem {
@@ -371,9 +370,9 @@ fn execute_add_item(ctx: &MessageContext, arguments: &Option<String>, user: &str
         created_by: user.to_string(),
     });
 
-    // Save updated state to session
-    save_todo_list(&session, &list);
-    save_next_id(&session, id + 1);
+    // Save updated state to storage
+    save_todo_list(&todos, &list);
+    save_next_id(&todos, id + 1);
 
     success_result(format!(
         "Added todo item #{}: {} (created by: {})",
@@ -382,11 +381,11 @@ fn execute_add_item(ctx: &MessageContext, arguments: &Option<String>, user: &str
 }
 
 fn execute_list_items(ctx: &MessageContext) -> CallToolResult {
-    let Some(session) = get_session(ctx) else {
-        return error_result("No session available".to_string());
+    let Some(todos) = get_todos(ctx) else {
+        return error_result("Key-value store unavailable".to_string());
     };
 
-    let list = load_todo_list(&session);
+    let list = load_todo_list(&todos);
 
     if list.is_empty() {
         success_result("No todo items".to_string())
@@ -400,8 +399,8 @@ fn execute_list_items(ctx: &MessageContext) -> CallToolResult {
 }
 
 fn execute_remove_item(ctx: &MessageContext, arguments: &Option<String>) -> CallToolResult {
-    let Some(session) = get_session(ctx) else {
-        return error_result("No session available".to_string());
+    let Some(todos) = get_todos(ctx) else {
+        return error_result("Key-value store unavailable".to_string());
     };
 
     let args_str = match arguments.as_ref() {
@@ -419,16 +418,16 @@ fn execute_remove_item(ctx: &MessageContext, arguments: &Option<String>) -> Call
         None => return error_result("Missing or invalid parameter 'id'".to_string()),
     };
 
-    // Load current state from session
-    let mut list = load_todo_list(&session);
+    // Load current state from storage
+    let mut list = load_todo_list(&todos);
     let original_len = list.len();
 
     // Remove item
     list.retain(|item| item.id != id);
 
     if list.len() < original_len {
-        // Save updated state to session
-        save_todo_list(&session, &list);
+        // Save updated state to storage
+        save_todo_list(&todos, &list);
         success_result(format!("Removed todo item #{}", id))
     } else {
         error_result(format!("Todo item #{} not found", id))
@@ -436,16 +435,16 @@ fn execute_remove_item(ctx: &MessageContext, arguments: &Option<String>) -> Call
 }
 
 fn execute_clear_all(ctx: &MessageContext) -> CallToolResult {
-    let Some(session) = get_session(ctx) else {
-        return error_result("No session available".to_string());
+    let Some(todos) = get_todos(ctx) else {
+        return error_result("Key-value store unavailable".to_string());
     };
 
-    let list = load_todo_list(&session);
+    let list = load_todo_list(&todos);
     let count = list.len();
 
-    // Clear list in session
-    save_todo_list(&session, &[]);
-    save_next_id(&session, 1);
+    // Clear list in storage
+    save_todo_list(&todos, &[]);
+    save_next_id(&todos, 1);
 
     success_result(format!("Cleared {} todo items", count))
 }

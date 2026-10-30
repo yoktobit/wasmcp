@@ -819,14 +819,14 @@ pub fn sync_versions(dry_run: bool, force: bool) -> Result<()> {
     // Check MCP WIT version first
     let mcp_wit_latest = get_latest_mcp_wit_release()?;
     if let Some(latest_version) = mcp_wit_latest {
-        let mcp_line = "mcp-v20250618 = ";
+        let mcp_line = "mcp-v20260728 = ";
         for line in content.lines() {
             if line.trim().starts_with(mcp_line) {
                 if let Some(version_str) = line.split('"').nth(1) {
                     let current_version = Version::parse(version_str)?;
                     if current_version != latest_version {
                         updates.push((
-                            "mcp-v20250618".to_string(),
+                            "mcp-v20260728".to_string(),
                             current_version,
                             latest_version,
                         ));

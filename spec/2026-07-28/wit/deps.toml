@@ -1,0 +1,2 @@
+io = "https://github.com/WebAssembly/wasi-io/archive/refs/tags/v0.2.8.tar.gz"
+auth = "https://github.com/wasmcp/wasmcp/releases/download/auth-v0.1.1/wasmcp-auth-0.1.1-source.tar.gz"

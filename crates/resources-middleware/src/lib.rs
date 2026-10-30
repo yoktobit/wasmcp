@@ -16,10 +16,10 @@ mod bindings {
     });
 }
 
-use bindings::exports::wasmcp::mcp_v20251125::server_handler::{Guest, MessageContext};
-use bindings::wasmcp::mcp_v20251125::mcp::*;
-use bindings::wasmcp::mcp_v20251125::resources;
-use bindings::wasmcp::mcp_v20251125::server_handler as downstream;
+use bindings::exports::wasmcp::mcp_v20260728::server_handler::{Guest, MessageContext};
+use bindings::wasmcp::mcp_v20260728::mcp::*;
+use bindings::wasmcp::mcp_v20260728::resources;
+use bindings::wasmcp::mcp_v20260728::server_handler as downstream;
 
 struct ResourcesMiddleware;
 
@@ -28,10 +28,9 @@ fn to_downstream_ctx<'a>(ctx: &'a MessageContext<'a>) -> downstream::MessageCont
     downstream::MessageContext {
         client_stream: ctx.client_stream,
         protocol_version: ctx.protocol_version.clone(),
-        session: ctx.session.as_ref().map(|s| downstream::Session {
-            session_id: s.session_id.clone(),
-            store_id: s.store_id.clone(),
-        }),
+        client_capabilities: ctx.client_capabilities.clone(),
+        client_info: ctx.client_info.clone(),
+        log_level: ctx.log_level,
         identity: ctx.identity.as_ref().map(|i| downstream::Identity {
             jwt: i.jwt.clone(),
             claims: i.claims.clone(),
@@ -49,19 +48,19 @@ impl Guest for ResourcesMiddleware {
         match message {
             ClientMessage::Request((request_id, request)) => {
                 // Handle requests - match on request type
-                let result = match &request {
+                let result = match request {
                     ClientRequest::ResourcesList(list_req) => {
-                        handle_resources_list(request_id.clone(), list_req.clone(), &ctx)
+                        handle_resources_list(request_id, list_req, &ctx)
                     }
                     ClientRequest::ResourcesRead(read_req) => {
-                        handle_resources_read(request_id.clone(), read_req.clone(), &ctx)
+                        handle_resources_read(request_id, read_req, &ctx)
                     }
                     ClientRequest::ResourcesTemplatesList(templates_req) => {
-                        handle_templates_list(request_id.clone(), templates_req.clone(), &ctx)
+                        handle_templates_list(request_id, templates_req, &ctx)
                     }
-                    _ => {
+                    other => {
                         // Delegate all other requests to downstream handler
-                        let downstream_msg = ClientMessage::Request((request_id.clone(), request));
+                        let downstream_msg = ClientMessage::Request((request_id.clone(), other));
                         return downstream::handle(&to_downstream_ctx(&ctx), downstream_msg);
                     }
                 };
@@ -109,6 +108,7 @@ fn handle_resources_list(
                         resources: all_resources,
                         next_cursor: downstream_result.next_cursor.or(our.next_cursor),
                         meta: our.meta.or(downstream_result.meta),
+                        cache: our.cache.or(downstream_result.cache),
                     }))
                 }
                 None => {
@@ -177,6 +177,7 @@ fn handle_resources_read(
     req: ReadResourceRequest,
     ctx: &MessageContext,
 ) -> Result<ServerResult, ErrorCode> {
+    let name = req.uri.clone();
     // Try reading from imported resources interface first
     match resources::read_resource(&to_downstream_ctx(ctx), &req) {
         Ok(Some(result)) => {
@@ -185,7 +186,7 @@ fn handle_resources_read(
         }
         Ok(None) => {
             // Imported interface doesn't handle this URI - try downstream
-            let downstream_req = ClientRequest::ResourcesRead(req.clone());
+            let downstream_req = ClientRequest::ResourcesRead(req);
             let downstream_msg = ClientMessage::Request((request_id, downstream_req));
             match downstream::handle(&to_downstream_ctx(ctx), downstream_msg) {
                 Some(Ok(response)) => Ok(response),
@@ -194,7 +195,7 @@ fn handle_resources_read(
                     // The method exists, but the URI parameter is invalid/unknown
                     Err(ErrorCode::InvalidParams(Error {
                         code: -32602,
-                        message: format!("Unknown resource URI: {}", req.uri),
+                        message: format!("Unknown resource URI: {}", name),
                         data: None,
                     }))
                 }
@@ -242,6 +243,7 @@ fn handle_templates_list(
                             resource_templates: all_templates,
                             next_cursor: downstream_result.next_cursor.or(our.next_cursor),
                             meta: our.meta.or(downstream_result.meta),
+                            cache: our.cache.or(downstream_result.cache),
                         },
                     ))
                 }

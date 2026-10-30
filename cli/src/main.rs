@@ -222,7 +222,7 @@ enum ComposeCommand {
         /// Override framework component or version (repeatable)
         ///
         /// Format: --override <component>=<value>
-        /// Valid components: transport, server-io, authorization, kv-store, session-store,
+        /// Valid components: transport, server-io, authorization, kv-store,
         /// method-not-found, tools-middleware, resources-middleware, prompts-middleware
         ///
         /// Value types:
@@ -253,11 +253,11 @@ enum ComposeCommand {
         #[arg(long, short = 'v')]
         verbose: bool,
 
-        /// Target runtime environment (determines session-store variant)
+        /// Target runtime environment (determines kv-store variant)
         ///
-        /// - spin: Uses WASI draft2/preview2 (session-store-d2)
-        /// - wasmtime: Uses WASI 0.2.x (session-store)
-        /// - wasmcloud: Uses WASI 0.2.x (session-store)
+        /// - spin: Uses WASI draft2/preview2 (kv-store-d2)
+        /// - wasmtime: Uses WASI 0.2.x (kv-store)
+        /// - wasmcloud: Uses WASI 0.2.x (kv-store)
         #[arg(long, value_name = "RUNTIME", default_value = "spin")]
         runtime: String,
     },

@@ -39,7 +39,6 @@ env:
     prompts-middleware
     resources-middleware
     server-io
-    session-store
     tools-middleware
     transport
 
@@ -149,7 +148,6 @@ jobs:
             crates/tools-middleware
             crates/server-io
             crates/transport
-            crates/session-store
 
       - name: Install wit-deps
         run: |
@@ -179,7 +177,6 @@ jobs:
             -p prompts-middleware \
             -p resources-middleware \
             -p server-io \
-            -p session-store \
             -p tools-middleware \
             -p transport 
 

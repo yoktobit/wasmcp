@@ -103,51 +103,7 @@ done
 echo -e "${GREEN}✓ MCP server is running at http://localhost:3000/mcp${NC}"
 echo ""
 
-# Session storage
-SESSION_ID=""
 REQUEST_ID=1
-
-# Initialize MCP session
-initialize_session() {
-    local path="$1"
-    local token_name="${2:-admin}"
-
-    echo -e "${BLUE}Initializing session on path: $path${NC}"
-
-    # Load token
-    local token=$($WASMCP_CLI jwt load-token "$token_name" 2>/dev/null)
-    if [ -z "$token" ]; then
-        echo -e "${RED}  ✗ Failed to load token '$token_name'${NC}"
-        return 1
-    fi
-
-    # Send initialize request to specific path
-    local init_response=$(curl -s -X POST \
-        -H "Authorization: Bearer $token" \
-        -H "Content-Type: application/json" \
-        -H "Accept: application/json, text/event-stream" \
-        -D /tmp/init_headers_$$.txt \
-        -d '{"jsonrpc":"2.0","id":'$REQUEST_ID',"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"routing-test","version":"1.0.0"}}}' \
-        http://localhost:3000$path)
-
-    REQUEST_ID=$((REQUEST_ID + 1))
-
-    # Extract session ID
-    if [ -f /tmp/init_headers_$$.txt ]; then
-        SESSION_ID=$(grep -i "^Mcp-Session-Id:" /tmp/init_headers_$$.txt | cut -d' ' -f2 | tr -d '\r\n')
-        rm -f /tmp/init_headers_$$.txt
-    fi
-
-    # Check initialization
-    if echo "$init_response" | grep -q '"result"'; then
-        echo -e "${GREEN}  ✓ Session initialized (ID: ${SESSION_ID})${NC}"
-        return 0
-    else
-        echo -e "${RED}  ✗ Initialization failed${NC}"
-        echo "    Response: $init_response"
-        return 1
-    fi
-}
 
 # List available tools
 list_tools() {
@@ -160,15 +116,12 @@ list_tools() {
     local token=$($WASMCP_CLI jwt load-token "$token_name" 2>/dev/null)
 
     # Build headers
-    local headers="-H \"Authorization: Bearer $token\" -H \"Content-Type: application/json\""
-    if [ -n "$SESSION_ID" ]; then
-        headers="$headers -H \"Mcp-Session-Id: $SESSION_ID\""
-    fi
+    local headers="-H \"Authorization: Bearer $token\" -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -H \"MCP-Protocol-Version: 2026-07-28\" -H \"Mcp-Method: tools/list\""
 
     # Make tools/list request
     local response=$(eval curl -s -X POST \
         $headers \
-        -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/list\",\"params\":{}}'" \
+        -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/list\",\"params\":{\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}}}'" \
         http://localhost:3000$path)
 
     REQUEST_ID=$((REQUEST_ID + 1))
@@ -204,15 +157,12 @@ call_tool() {
     local token=$($WASMCP_CLI jwt load-token "$token_name" 2>/dev/null)
 
     # Build headers
-    local headers="-H \"Authorization: Bearer $token\" -H \"Content-Type: application/json\""
-    if [ -n "$SESSION_ID" ]; then
-        headers="$headers -H \"Mcp-Session-Id: $SESSION_ID\""
-    fi
+    local headers="-H \"Authorization: Bearer $token\" -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -H \"MCP-Protocol-Version: 2026-07-28\" -H \"Mcp-Method: tools/call\" -H \"Mcp-Name: $tool_name\""
 
     # Make tools/call request
     local response=$(eval curl -s -X POST \
         $headers \
-        -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool_name\",\"arguments\":$args}}'" \
+        -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool_name\",\"arguments\":$args,\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}}}'" \
         http://localhost:3000$path)
 
     REQUEST_ID=$((REQUEST_ID + 1))
@@ -252,7 +202,6 @@ echo "Path: /mcp"
 echo "Expected: All tools from all components"
 echo ""
 
-initialize_session "/mcp" || exit 1
 TOOLS_ALL=$(list_tools "/mcp")
 
 # Verify we have tools from both calculator and todo-list
@@ -274,7 +223,6 @@ echo "Config: whitelist=[calculator-rs], blacklist=[factorial]"
 echo "Expected: add, subtract (NO factorial, NO todo tools)"
 echo ""
 
-initialize_session "/mcp/math" || exit 1
 TOOLS_MATH=$(list_tools "/mcp/math")
 
 # Verify calculator tools present (except factorial which is blacklisted)
@@ -310,7 +258,6 @@ echo "Config: whitelist=[add] (overrides /mcp/math)"
 echo "Expected: ONLY add tool"
 echo ""
 
-initialize_session "/mcp/math/addition" || exit 1
 TOOLS_ADDITION=$(list_tools "/mcp/math/addition")
 
 # Verify only add is present
@@ -333,7 +280,6 @@ echo "Config: whitelist=[todo-list-auth]"
 echo "Expected: add_item, list_items, remove_item, clear_all (NO calculator)"
 echo ""
 
-initialize_session "/mcp/todo" || exit 1
 TOOLS_TODO=$(list_tools "/mcp/todo")
 
 # Verify todo tools present
@@ -362,7 +308,6 @@ echo "Config: whitelist=[add, subtract, factorial]"
 echo "Expected: add, subtract, factorial only"
 echo ""
 
-initialize_session "/mcp/calc" || exit 1
 TOOLS_CALC=$(list_tools "/mcp/calc")
 
 # Verify expected tools
@@ -386,11 +331,9 @@ echo ""
 echo "==================================================================="
 echo "SCENARIO 6: tools/call Enforcement"
 echo "==================================================================="
-echo "Test: Attempt to call filtered tool not in session registry"
+echo "Test: Attempt to call filtered tool not in the filtered tool list"
 echo ""
 
-# First, list tools on /mcp/math to populate session registry
-initialize_session "/mcp/math" || exit 1
 list_tools "/mcp/math" > /dev/null
 
 # Now try to call a todo tool (should be blocked)
@@ -413,7 +356,6 @@ echo "Config: tag-filters = { category = \"math\" }"
 echo "Expected: Only tools with category=math tag (calculator tools)"
 echo ""
 
-initialize_session "/mcp/math-only" || exit 1
 TOOLS_TAG_MATH=$(list_tools "/mcp/math-only")
 
 # Verify calculator tools present (all have category=math)
@@ -442,7 +384,6 @@ echo "Config: tag-filters = { category = \"math\", tool-level = \"foundational\"
 echo "Expected: Only tools matching BOTH category=math AND tool-level=foundational"
 echo ""
 
-initialize_session "/mcp/foundational-math" || exit 1
 TOOLS_MULTI_TAG=$(list_tools "/mcp/foundational-math")
 
 # Verify calculator tools present (have both category=math AND tool-level=foundational)
@@ -469,19 +410,14 @@ echo "==================================================================="
 echo "Expected: Diagnostic shows config sources and effective rules"
 echo ""
 
-initialize_session "/mcp" || exit 1
-list_tools "/mcp" > /dev/null  # Populate session
 
 # Call inspect_routing tool
 TOKEN=$($WASMCP_CLI jwt load-token admin 2>/dev/null)
-HEADERS="-H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\""
-if [ -n "$SESSION_ID" ]; then
-    HEADERS="$HEADERS -H \"Mcp-Session-Id: $SESSION_ID\""
-fi
+HEADERS="-H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -H \"MCP-Protocol-Version: 2026-07-28\""
 
 INSPECT_RESULT=$(eval curl -s -X POST \
     $HEADERS \
-    -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_routing\",\"arguments\":{}}}'" \
+    -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_routing\",\"arguments\":{},\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}}}'" \
     http://localhost:3000/mcp)
 
 REQUEST_ID=$((REQUEST_ID + 1))
@@ -546,7 +482,6 @@ echo "Override config: blacklist=[add]"
 echo "Expected: add DENIED, subtract allowed (Deny Trumps Allow)"
 echo ""
 
-initialize_session "/mcp/math" || exit 1
 TOOLS_DENY=$(list_tools "/mcp/math")
 
 # Verify add is DENIED
@@ -576,7 +511,6 @@ echo "Override config: whitelist=[add_item, list_items]"
 echo "Expected: All 5 tools available (union)"
 echo ""
 
-initialize_session "/mcp/calc" || exit 1
 TOOLS_UNION=$(list_tools "/mcp/calc")
 
 # Verify calculator tools present
@@ -605,7 +539,6 @@ echo "Override config: [tag-filters] tool-level = \"foundational\""
 echo "Expected: Only foundational-level tools (all current tools are foundational)"
 echo ""
 
-initialize_session "/mcp" || exit 1
 TOOLS_GLOBAL=$(list_tools "/mcp")
 
 # All our test tools are foundational, so should still see them
@@ -627,7 +560,6 @@ echo "Override config: whitelist=[factorial]"
 echo "Expected: Only factorial tool"
 echo ""
 
-initialize_session "/mcp/override-only" || exit 1
 TOOLS_NEW_PATH=$(list_tools "/mcp/override-only")
 
 # Verify only factorial present
@@ -648,19 +580,15 @@ echo "==================================================================="
 echo "Expected: Diagnostic shows BOTH configs and conflict at /mcp/math"
 echo ""
 
-initialize_session "/mcp" || exit 1
 list_tools "/mcp" > /dev/null
 
 # Call inspect_routing
 TOKEN=$($WASMCP_CLI jwt load-token admin 2>/dev/null)
-HEADERS="-H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\""
-if [ -n "$SESSION_ID" ]; then
-    HEADERS="$HEADERS -H \"Mcp-Session-Id: $SESSION_ID\""
-fi
+HEADERS="-H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -H \"MCP-Protocol-Version: 2026-07-28\""
 
 INSPECT_MULTI=$(eval curl -s -X POST \
     $HEADERS \
-    -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_routing\",\"arguments\":{}}}'" \
+    -d "'{\"jsonrpc\":\"2.0\",\"id\":$REQUEST_ID,\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_routing\",\"arguments\":{},\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}}}'" \
     http://localhost:3000/mcp)
 
 REQUEST_ID=$((REQUEST_ID + 1))
@@ -717,7 +645,7 @@ echo "   • Longest matching path wins"
 echo ""
 echo "5. ${GREEN}tools/call Enforcement${NC}"
 echo "   • Filtered tools blocked even if called directly"
-echo "   • Session registry validates tool availability"
+echo "   • Filtering is recomputed on every request"
 echo ""
 echo "6. ${GREEN}Tag-Based Filtering${NC}"
 echo "   • /mcp/math-only filters by category=math tag"

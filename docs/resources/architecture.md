@@ -34,7 +34,7 @@ wasmcp separates business logic from protocol handling:
 
 **What they do:** Implement business logic
 
-**What they export:** Clean capability interfaces from `spec/2025-06-18/wit/` (tools, resources, prompts, completions)
+**What they export:** Clean capability interfaces from `spec/2026-07-28/wit/` (tools, resources, prompts, completions)
 
 **Example (tools):**
 ```wit
@@ -163,7 +163,7 @@ Only the middleware that owns the tool executes it.
 
 ## Handler Interface
 
-All components in chain use same interface from `spec/2025-06-18/wit/server.wit` (server-handler interface):
+All components in chain use same interface from `spec/2026-07-28/wit/server.wit` (server-handler interface):
 
 ```wit
 interface handler {
@@ -342,26 +342,15 @@ Published to `ghcr.io/wasmcp`, auto-downloaded by CLI:
 | `prompts-middleware` | Prompts wrapper | Middle |
 | `method-not-found` | Error handler | Bottom |
 
-## Sessions and Notifications
+## State and Notifications
 
-### Sessions
+### State
 
-**Interface:** `spec/2025-06-18/wit/sessions.wit`
-
-For middleware needing state across requests:
-
-```wit
-interface sessions {
-  initialize: func(session-id: string) -> result<_, error>
-  terminate: func(session-id: string) -> result<_, error>
-}
-```
-
-**Use cases:** Connection pooling, authentication state
+MCP 2026-07-28 is stateless: there are no sessions. Middleware needing state across requests should use the `wasmcp:keyvalue/store` interface (provided by `kv-store`).
 
 ### Notifications
 
-**Interface:** `spec/2025-06-18/wit/notifications.wit`
+**Interface:** `spec/2026-07-28/wit/notifications.wit`
 
 For server-to-client notifications:
 

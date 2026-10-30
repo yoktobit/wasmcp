@@ -21,12 +21,11 @@ use crate::versioning::VersionResolver;
 /// The composition strategy:
 /// 1. Instantiate method-not-found (terminal handler)
 /// 2. Instantiate each user component in reverse order, wiring to previous
-/// 3. Instantiate session-store, wiring to the user component chain
-/// 4. Instantiate server-io, wiring to session-store
-/// 5. Instantiate transport at the front, wiring to server-io
-/// 6. Export the transport's WASI interface (http or cli)
+/// 3. Instantiate server-io, wiring to the user component chain
+/// 4. Instantiate transport at the front, wiring to server-io
+/// 5. Export the transport's WASI interface (http or cli)
 ///
-/// This creates the chain: transport → server-io → session-store → component₁ → ... → componentₙ → method-not-found
+/// This creates the chain: transport → server-io → component₁ → ... → componentₙ → method-not-found
 ///
 /// Each component's `server-handler` import is satisfied by the next component's
 /// `server-handler` export, creating a linear middleware pipeline.
@@ -230,7 +229,7 @@ pub async fn build_handler_composition(
     }
 
     let mut graph = CompositionGraph::new();
-    let version = version_resolver.get_version("mcp-v20251125")?;
+    let version = version_resolver.get_version("mcp-v20260728")?;
     let server_handler_interface = interfaces::server_handler(&version);
 
     // Load and register all components
@@ -404,11 +403,11 @@ mod tests {
     fn test_server_handler_interface_construction() {
         use crate::commands::compose::inspection::interfaces;
 
-        let version = "0.1.1";
+        let version = "0.1.0";
         let interface = interfaces::server_handler(version);
 
-        assert_eq!(interface, "wasmcp:mcp-v20251125/server-handler@0.1.1");
-        assert!(interface.starts_with("wasmcp:mcp-v20251125/server-handler@"));
+        assert_eq!(interface, "wasmcp:mcp-v20260728/server-handler@0.1.0");
+        assert!(interface.starts_with("wasmcp:mcp-v20260728/server-handler@"));
     }
 
     /// Test error context for component loading

@@ -42,8 +42,8 @@ impl Default for RuntimeInfo {
 /// what runtime it targets and what capabilities it requires.
 ///
 /// Detection logic:
-/// - `package wasmcp:sessions@X.Y.Z` → Wasmtime (draft2)
-/// - `package wasmcp:sessions-d2@X.Y.Z` → Spin/other runtime
+/// - `package wasmcp:keyvalue@X.Y.Z` → Wasmtime (stable WASI)
+/// - `package wasmcp:keyvalue-d2@X.Y.Z` → Spin/other runtime
 /// - WASI imports determine required capabilities
 pub fn detect_runtime(component_bytes: &[u8]) -> Result<RuntimeInfo> {
     let decoded = wit_component::decode(component_bytes)

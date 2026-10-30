@@ -1,7 +1,7 @@
 //! Framework component resolution
 //!
 //! This module handles resolution and downloading of wasmcp framework components
-//! (transport, server-io, session-store, method-not-found). Framework components are
+//! (transport, server-io, method-not-found). Framework components are
 //! downloaded from OCI registries and cached locally.
 //!
 //! # Resolution Flow

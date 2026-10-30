@@ -21,8 +21,8 @@ fn load_component_names() -> Result<Vec<String>> {
 
     let mut components = Vec::new();
     for key in versions_table.keys() {
-        // Skip WIT package versions (like mcp-v20250618)
-        if !key.contains("v202") && key != "mcp-v20250618" {
+        // Skip WIT package versions (like mcp-v20260728)
+        if !key.contains("v202") && key != "mcp-v20260728" {
             components.push(key.clone());
         }
     }
@@ -179,12 +179,7 @@ fn run_with_spin(wasm: &Path) -> Result<()> {
 
     let status = Command::new("spin")
         .args(["up", "-f", "spin.toml"])
-        .args([
-            "-e",
-            "WASMCP_SESSION_ENABLED=true",
-            "-e",
-            "WASMCP_SESSION_BUCKET=default",
-        ])
+        .args(["-e", "WASMCP_KV_BUCKET=default"])
         .current_dir(agent_dir)
         .status()
         .context("Failed to run spin")?;

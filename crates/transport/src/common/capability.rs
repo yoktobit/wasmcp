@@ -1,40 +1,27 @@
 //! Capability discovery for MCP servers
 
-use crate::bindings::wasmcp::mcp_v20251125::mcp::{
+use crate::bindings::wasmcp::mcp_v20260728::mcp::{
     ClientMessage, ClientRequest, CompleteRequest, CompletionArgument, CompletionPromptReference,
     CompletionReference, ErrorCode, ListPromptsRequest, ListResourcesRequest, ListToolsRequest,
-    ProtocolVersion, RequestId, ServerCapabilities, ServerLists, ServerResult,
+    RequestId, ServerCapabilities, ServerLists, ServerResult,
 };
-use crate::bindings::wasmcp::mcp_v20251125::server_handler::handle;
-use crate::bindings::wasmcp::mcp_v20251125::server_io::MessageFrame;
-use crate::common::protocol::create_message_context;
+use crate::bindings::wasmcp::mcp_v20260728::server_handler::handle;
+use crate::bindings::wasmcp::mcp_v20260728::server_io::MessageFrame;
+use crate::common::protocol::{create_message_context, empty_meta};
 
 /// Request ID for internal capability discovery probes
 /// Uses -1 to avoid conflicts with real client request IDs (which are typically positive)
 const CAPABILITY_PROBE_REQUEST_ID: i64 = -1;
 
-/// Discover capabilities for initialize response
-///
-/// This is called during initialize to probe the downstream handler
-pub fn discover_capabilities_for_init(
-    protocol_version: ProtocolVersion,
-    frame: &MessageFrame,
-) -> ServerCapabilities {
-    discover_capabilities(protocol_version, frame)
-}
-
 /// Discover server capabilities by probing downstream handler
 ///
 /// This sends test requests to see what the middleware stack supports
-fn discover_capabilities(
-    protocol_version: ProtocolVersion,
-    frame: &MessageFrame,
-) -> ServerCapabilities {
+pub fn discover_capabilities(frame: &MessageFrame) -> ServerCapabilities {
     let mut list_changed_flags = ServerLists::empty();
     let mut has_completions = false;
 
     // Probe for tools support
-    let tools_ctx = create_message_context(None, protocol_version, None, None, "", frame, None);
+    let tools_ctx = create_message_context(None, &empty_meta(), None, frame, None);
     let tools_request = ClientRequest::ToolsList(ListToolsRequest { cursor: None });
     let tools_message = ClientMessage::Request((
         RequestId::Number(CAPABILITY_PROBE_REQUEST_ID),
@@ -45,7 +32,7 @@ fn discover_capabilities(
     }
 
     // Probe for resources support
-    let resources_ctx = create_message_context(None, protocol_version, None, None, "", frame, None);
+    let resources_ctx = create_message_context(None, &empty_meta(), None, frame, None);
     let resources_request = ClientRequest::ResourcesList(ListResourcesRequest { cursor: None });
     let resources_message = ClientMessage::Request((
         RequestId::Number(CAPABILITY_PROBE_REQUEST_ID),
@@ -56,7 +43,7 @@ fn discover_capabilities(
     }
 
     // Probe for prompts support and use result to test completions
-    let prompts_ctx = create_message_context(None, protocol_version, None, None, "", frame, None);
+    let prompts_ctx = create_message_context(None, &empty_meta(), None, frame, None);
     let prompts_request = ClientRequest::PromptsList(ListPromptsRequest { cursor: None });
     let prompts_message = ClientMessage::Request((
         RequestId::Number(CAPABILITY_PROBE_REQUEST_ID),
@@ -91,7 +78,7 @@ fn discover_capabilities(
 
                 // Test if completions are supported
                 let completion_ctx =
-                    create_message_context(None, protocol_version, None, None, "", frame, None);
+                    create_message_context(None, &empty_meta(), None, frame, None);
                 let req = ClientRequest::CompletionComplete(completion_request);
                 let completion_message =
                     ClientMessage::Request((RequestId::Number(CAPABILITY_PROBE_REQUEST_ID), req));
@@ -119,12 +106,13 @@ fn discover_capabilities(
             None
         },
         experimental: None,
-        logging: Some("{}".to_string()), // We support logging/setLevel
+        logging: Some("{}".to_string()),
         list_changed: if list_changed_flags.is_empty() {
             None
         } else {
             Some(list_changed_flags)
         },
-        subscriptions: None, // TODO: Probe for subscription support
+        subscriptions: None,
+        extensions: None,
     }
 }

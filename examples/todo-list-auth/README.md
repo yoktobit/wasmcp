@@ -1,6 +1,6 @@
 # Todo List with Authorization Patterns
 
-This example demonstrates different authorization strategies for MCP tools using JWT-based authentication with session-based state persistence. It shows how to implement scope-based, role-based, and attribute-based access control in wasmcp components.
+This example demonstrates different authorization strategies for MCP tools using JWT-based authentication with key-value state persistence. It shows how to implement scope-based, role-based, and attribute-based access control in wasmcp components.
 
 ## Overview
 
@@ -28,7 +28,7 @@ make work
 
 The test script will:
 - Start Spin server with proper configuration
-- Initialize sessions for different user roles
+- Use tokens for different user roles
 - Test all authorization patterns
 - Clean up processes when done
 
@@ -231,53 +231,44 @@ Server will be available at `http://localhost:3000/mcp`.
 You can use the following to manually show the difference in functionality based on roles/scopes 
 
 ```bash
-# 1. Initialize session with admin token (returns session ID in Mcp-Session-Id header)
+# 1. Load the admin token (the protocol is stateless: no initialize/session)
 TOKEN=$(wasmcp jwt load-token admin)
-SESSION_ID=$(curl -s -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -D - \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}' \
-  http://localhost:3000/mcp | grep -i "mcp-session-id" | cut -d' ' -f2 | tr -d '\r')
 
 # 2. Add a todo item (requires mcp:write scope)
 curl -X POST \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Mcp-Session-Id: $SESSION_ID" \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: tools/call" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_item","arguments":"{\"title\":\"Write documentation\"}"}}' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_item","arguments":"{\"title\":\"Write documentation\"}","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
   http://localhost:3000/mcp
 
 # 3. List todo items (requires mcp:read scope)
 curl -X POST \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Mcp-Session-Id: $SESSION_ID" \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: tools/call" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_items","arguments":"{}"}}' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_items","arguments":"{}","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
   http://localhost:3000/mcp
 
 # 4. Remove a todo item (requires role=admin)
 curl -X POST \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Mcp-Session-Id: $SESSION_ID" \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: tools/call" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"remove_item","arguments":"{\"id\":1}"}}' \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"remove_item","arguments":"{\"id\":1}","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
   http://localhost:3000/mcp
 
 # Test authorization denial with readonly token trying to add item (requires mcp:write)
 TOKEN=$(wasmcp jwt load-token readonly)
-SESSION_ID=$(curl -s -X POST \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -D - \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}' \
-  http://localhost:3000/mcp | grep -i "mcp-session-id" | cut -d' ' -f2 | tr -d '\r')
-
 curl -X POST \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Mcp-Session-Id: $SESSION_ID" \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: tools/call" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_item","arguments":"{\"title\":\"This should fail\"}"}}' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_item","arguments":"{\"title\":\"This should fail\"}","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
   http://localhost:3000/mcp
 # Expected: Authorization failed for 'add_item': mcp:write scope required
 ```

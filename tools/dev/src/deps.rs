@@ -31,8 +31,8 @@ fn find_deps_files() -> Result<Vec<PathBuf>> {
 fn url_to_local_path(url: &str, local_base: &Path) -> Option<PathBuf> {
     // Extract package name from URL
     // Examples:
-    // "https://github.com/wasmcp/wasmcp/releases/download/mcp-v2025-06-18-v0.1.6/wasmcp-mcp-v2025-06-18-0.1.6-source.tar.gz"
-    // -> extract "mcp-v2025-06-18"
+    // "https://github.com/wasmcp/wasmcp/releases/download/mcp-v2026-07-28-v0.1.6/wasmcp-mcp-v2026-07-28-0.1.6-source.tar.gz"
+    // -> extract "mcp-v2026-07-28"
 
     let local_path = if url.contains("/wasmcp/") {
         // Extract version/package name from wasmcp releases

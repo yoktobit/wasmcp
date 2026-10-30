@@ -132,10 +132,10 @@ pub fn update_wit_dependency_versions(
 pub fn update_deps_toml_mcp_version(deps_toml: &Path, target_version: &str) -> Result<()> {
     update_lines_in_file(
         deps_toml,
-        |line| line.contains("mcp-v20250618") && line.contains('='),
+        |line| line.contains("mcp-v20260728") && line.contains('='),
         |_| {
             format!(
-                "mcp-v20250618 = \"https://github.com/wasmcp/wasmcp/releases/download/mcp-v2025-06-18-v{}/wasmcp-mcp-v2025-06-18-{}-source.tar.gz\"",
+                "mcp-v20260728 = \"https://github.com/wasmcp/wasmcp/releases/download/mcp-v2026-07-28-v{}/wasmcp-mcp-v2026-07-28-{}-source.tar.gz\"",
                 target_version, target_version
             )
         },

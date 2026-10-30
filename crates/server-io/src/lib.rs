@@ -33,11 +33,11 @@ mod writing;
 #[cfg(test)]
 mod tests;
 
-use bindings::exports::wasmcp::mcp_v20251125::server_io::{
-    Guest, IoError, MessageFrame, ReadLimit,
+use bindings::exports::wasmcp::mcp_v20260728::server_io::{
+    Guest, IoError, MessageFrame, ParsedMessage, ReadLimit,
 };
 use bindings::wasi::io::streams::{InputStream, OutputStream};
-use bindings::wasmcp::mcp_v20251125::mcp::*;
+use bindings::wasmcp::mcp_v20260728::mcp::*;
 
 struct ServerIo;
 
@@ -50,7 +50,7 @@ impl Guest for ServerIo {
         input: &InputStream,
         limit: ReadLimit,
         frame: MessageFrame,
-    ) -> Result<ClientMessage, IoError> {
+    ) -> Result<ParsedMessage, IoError> {
         // Read raw bytes based on limit
         let raw_bytes = match limit {
             ReadLimit::Delimiter(delim) => {

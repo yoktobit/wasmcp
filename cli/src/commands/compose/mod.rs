@@ -86,7 +86,7 @@ pub struct ComposeOptions {
     ///
     /// Map of framework component names to override specs (paths or package names).
     /// Valid component names: transport, server-io, authorization, kv-store,
-    /// session-store, method-not-found, tools-middleware, resources-middleware,
+    /// method-not-found, tools-middleware, resources-middleware,
     /// prompts-middleware.
     pub overrides: HashMap<String, String>,
 
@@ -106,7 +106,7 @@ pub struct ComposeOptions {
     pub mode: CompositionMode,
 
     /// Runtime environment: "spin", "wasmcloud", or "wasmtime"
-    /// Determines which session-store variant to use
+    /// Determines which kv-store variant to use
     pub runtime: String,
 }
 
@@ -231,7 +231,6 @@ async fn compose_server(options: ComposeOptions) -> Result<()> {
     } else {
         // skip_download: still need structural components that download_dependencies would add
         let mut deps = required_deps.clone();
-        deps.insert("session-store".to_string());
         deps.insert("kv-store".to_string());
         for mw in &required_middleware {
             deps.insert(mw.clone());
@@ -490,11 +489,11 @@ mod tests {
     fn test_interface_names() {
         assert_eq!(
             inspection::interfaces::server_handler("0.1.0"),
-            "wasmcp:mcp-v20251125/server-handler@0.1.0"
+            "wasmcp:mcp-v20260728/server-handler@0.1.0"
         );
         assert_eq!(
             inspection::interfaces::tools("0.1.0"),
-            "wasmcp:mcp-v20251125/tools@0.1.0"
+            "wasmcp:mcp-v20260728/tools@0.1.0"
         );
         // Note: WASI interface versions now come from VersionResolver, not constants
         // These would require a resolver instance to test properly
@@ -665,7 +664,7 @@ mod tests {
         assert!(
             options
                 .version_resolver
-                .get_version("mcp-v20251125")
+                .get_version("mcp-v20260728")
                 .is_ok()
         );
     }
@@ -686,7 +685,7 @@ mod tests {
         assert!(
             options
                 .version_resolver
-                .get_version("mcp-v20251125")
+                .get_version("mcp-v20260728")
                 .is_ok()
         );
         assert_eq!(

@@ -216,13 +216,8 @@ To test your routing configuration:
 
 Example test:
 ```bash
-# Initialize session at path
-curl -X POST http://localhost:3000/mcp \
-  -H "Mcp-Session-Path: /api/admin" \
-  -d '{"method":"initialize",...}'
-
-# List available tools
-curl -X POST http://localhost:3000/mcp \
+# List available tools at a path
+curl -X POST http://localhost:3000/api/admin \
   -d '{"method":"tools/list",...}'
 
 # Try calling filtered tool (should fail)

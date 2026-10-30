@@ -1,7 +1,8 @@
 //! Counter Middleware Component
 //!
-//! A server middleware that counts tool invocations within a session.
-//! Demonstrates both the middleware pattern and session storage.
+//! A server middleware that counts tool invocations across requests.
+//! Demonstrates both the middleware pattern and key-value storage
+//! (the protocol is stateless, so the counter is global rather than per-session).
 
 mod bindings {
     wit_bindgen::generate!({
@@ -10,12 +11,12 @@ mod bindings {
     });
 }
 
-use bindings::exports::wasmcp::mcp_v20251125::server_handler::{Guest, MessageContext};
+use bindings::exports::wasmcp::mcp_v20260728::server_handler::{Guest, MessageContext};
 use bindings::wasmcp::keyvalue::store::TypedValue;
-use bindings::wasmcp::mcp_v20251125::mcp::*;
-use bindings::wasmcp::mcp_v20251125::server_handler as downstream;
-use bindings::wasmcp::mcp_v20251125::server_io;
-use bindings::wasmcp::mcp_v20251125::sessions::Session;
+use bindings::wasmcp::mcp_v20260728::mcp::*;
+use bindings::wasmcp::mcp_v20260728::server_handler as downstream;
+use bindings::wasmcp::mcp_v20260728::server_io;
+use bindings::wasmcp::keyvalue::store as kv;
 
 struct Counter;
 
@@ -30,7 +31,9 @@ impl Guest for Counter {
             let downstream_ctx = downstream::MessageContext {
                 client_stream: ctx.client_stream,
                 protocol_version: ctx.protocol_version,
-                session: ctx.session,
+                client_capabilities: ctx.client_capabilities,
+                client_info: ctx.client_info,
+                log_level: ctx.log_level,
                 identity: ctx.identity,
                 frame: ctx.frame,
                 http_context: ctx.http_context,
@@ -50,7 +53,9 @@ impl Guest for Counter {
                 let downstream_ctx = downstream::MessageContext {
                     client_stream: ctx.client_stream,
                     protocol_version: ctx.protocol_version,
-                    session: ctx.session,
+                    client_capabilities: ctx.client_capabilities,
+                client_info: ctx.client_info,
+                log_level: ctx.log_level,
                     identity: ctx.identity,
                     frame: ctx.frame,
                     http_context: ctx.http_context,
@@ -77,7 +82,7 @@ fn handle_list_tools(
             meta: None,
             annotations: None,
             description: Some(
-                "Get the current tool call count for this session.".to_string(),
+                "Get the total tool call count.".to_string(),
             ),
             output_schema: None,
             title: Some("Get Call Count".to_string()),
@@ -89,7 +94,9 @@ fn handle_list_tools(
     let downstream_ctx = downstream::MessageContext {
         client_stream: ctx.client_stream,
         protocol_version: ctx.protocol_version.clone(),
-        session: ctx.session.clone(),
+        client_capabilities: ctx.client_capabilities.clone(),
+                client_info: ctx.client_info.clone(),
+                log_level: ctx.log_level,
         identity: ctx.identity.clone(),
         frame: ctx.frame.clone(),
         http_context: ctx.http_context.clone(),
@@ -109,6 +116,7 @@ fn handle_list_tools(
             Ok(ListToolsResult {
                 tools: all_tools,
                 next_cursor: downstream_result.next_cursor,
+                cache: downstream_result.cache,
                 meta: downstream_result.meta,
             })
         }
@@ -117,6 +125,7 @@ fn handle_list_tools(
             Ok(ListToolsResult {
                 tools: vec![our_tool],
                 next_cursor: None,
+                cache: None,
                 meta: None,
             })
         }
@@ -136,7 +145,9 @@ fn handle_call_tool(
     let downstream_ctx = downstream::MessageContext {
         client_stream: ctx.client_stream,
         protocol_version: ctx.protocol_version.clone(),
-        session: ctx.session.clone(),
+        client_capabilities: ctx.client_capabilities.clone(),
+                client_info: ctx.client_info.clone(),
+                log_level: ctx.log_level,
         identity: ctx.identity.clone(),
         frame: ctx.frame.clone(),
         http_context: ctx.http_context.clone(),
@@ -175,81 +186,53 @@ fn log_notification(ctx: &MessageContext, message: String, level: LogLevel) {
     }
 }
 
-fn increment_counter(ctx: &MessageContext) {
-    let counter_key = "tool_call_count";
+const COUNTER_KEY: &str = "tool_call_count";
 
-    if let Some(session_info) = &ctx.session {
-        if let Ok(session) = Session::open(&session_info.session_id, &session_info.store_id) {
-            let current_count = match session.get(counter_key) {
-                Ok(Some(TypedValue::AsBytes(bytes))) => {
-                    let count_str = String::from_utf8(bytes).unwrap_or_default();
-                    count_str.parse::<u64>().unwrap_or(0)
-                }
-                Ok(Some(TypedValue::AsString(s))) => s.parse::<u64>().unwrap_or(0),
-                Ok(Some(TypedValue::AsU64(n))) => n,
-                _ => 0,
-            };
-
-            let new_count = current_count + 1;
-            let _ = session.set(
-                counter_key,
-                &TypedValue::AsU64(new_count),
-            );
-
-            // Send notification about the counter increment
-            log_notification(
-                ctx,
-                format!("Tool call counter incremented to {}", new_count),
-                LogLevel::Info,
-            );
-        }
+fn read_count(bucket: &kv::Bucket) -> u64 {
+    match bucket.get(COUNTER_KEY) {
+        Ok(Some(TypedValue::AsBytes(bytes))) => String::from_utf8(bytes)
+            .unwrap_or_default()
+            .parse::<u64>()
+            .unwrap_or(0),
+        Ok(Some(TypedValue::AsString(s))) => s.parse::<u64>().unwrap_or(0),
+        Ok(Some(TypedValue::AsU64(n))) => n,
+        _ => 0,
     }
 }
 
-fn get_current_count(ctx: &MessageContext) -> (u64, bool) {
-    let counter_key = "tool_call_count";
+fn increment_counter(ctx: &MessageContext) {
+    if let Ok(bucket) = kv::open("") {
+        let new_count = read_count(&bucket) + 1;
+        let _ = bucket.set(COUNTER_KEY, &TypedValue::AsU64(new_count));
 
-    if let Some(session_info) = &ctx.session {
-        if let Ok(session) = Session::open(&session_info.session_id, &session_info.store_id) {
-            match session.get(counter_key) {
-                Ok(Some(TypedValue::AsBytes(bytes))) => {
-                    let count_str = String::from_utf8(bytes).unwrap_or_default();
-                    let count = count_str.parse::<u64>().unwrap_or(0);
-                    return (count, true);
-                }
-                Ok(Some(TypedValue::AsString(s))) => {
-                    let count = s.parse::<u64>().unwrap_or(0);
-                    return (count, true);
-                }
-                Ok(Some(TypedValue::AsU64(n))) => {
-                    return (n, true);
-                }
-                _ => return (0, true),
-            }
-        }
+        // Send notification about the counter increment
+        log_notification(
+            ctx,
+            format!("Tool call counter incremented to {}", new_count),
+            LogLevel::Info,
+        );
     }
-
-    (0, false)
 }
 
 fn execute_get_count(ctx: &MessageContext) -> CallToolResult {
-    let (count, has_session) = get_current_count(ctx);
-
-    let message = if has_session {
-        // Send notification about retrieving the count
-        log_notification(
-            ctx,
-            format!("Retrieving counter: {} tool calls in this session", count),
-            LogLevel::Info,
-        );
-        format!("Total tool calls in this session: {}", count)
-    } else {
-        log_notification(
-            ctx,
-            "No session active - counter not available".to_string(),
-            LogLevel::Warning,
-        );
-        "No session active - counter not available".to_string()
+    let message = match kv::open("") {
+        Ok(bucket) => {
+            let count = read_count(&bucket);
+            log_notification(
+                ctx,
+                format!("Retrieving counter: {} tool calls", count),
+                LogLevel::Info,
+            );
+            format!("Total tool calls: {}", count)
+        }
+        Err(_) => {
+            log_notification(
+                ctx,
+                "Key-value store unavailable - counter not available".to_string(),
+                LogLevel::Warning,
+            );
+            "Key-value store unavailable - counter not available".to_string()
+        }
     };
 
     success_result(message)

@@ -10,9 +10,9 @@ mod bindings {
     });
 }
 
-use bindings::exports::wasmcp::mcp_v20251125::resources::Guest;
-use bindings::wasmcp::mcp_v20251125::mcp::*;
-use bindings::wasmcp::mcp_v20251125::server_handler::MessageContext;
+use bindings::exports::wasmcp::mcp_v20260728::resources::Guest;
+use bindings::wasmcp::mcp_v20260728::mcp::*;
+use bindings::wasmcp::mcp_v20260728::server_handler::MessageContext;
 
 const ROUTING_URI: &str = "config://routing-{{project_name}}";
 
@@ -39,6 +39,7 @@ impl Guest for RoutingConfig {
                 }),
             }],
             next_cursor: None,
+            cache: None,
             meta: None,
         })
     }
@@ -53,6 +54,7 @@ impl Guest for RoutingConfig {
 
             Ok(Some(ReadResourceResult {
                 meta: None,
+                cache: None,
                 contents: vec![ResourceContents::Text(TextResourceContents {
                     uri: request.uri,
                     text: TextData::Text(config_toml.to_string()),
@@ -75,6 +77,7 @@ impl Guest for RoutingConfig {
         Ok(ListResourceTemplatesResult {
             meta: None,
             next_cursor: None,
+            cache: None,
             resource_templates: vec![],
         })
     }

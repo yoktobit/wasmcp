@@ -1,46 +1,37 @@
 //! POST request handler
 //!
 //! POST is the primary MCP transport method. This module handles:
-//! - Header validation (Accept, session, auth)
-//! - Session validation and management
+//! - Header validation (Accept, MCP-Protocol-Version, Mcp-Method, auth)
 //! - JWT authentication (with graceful degradation)
 //! - Request body stream acquisition
 //! - MCP message parsing
 //! - Message type routing (Request, Notification, Result, Error)
 //! - Delegation to mode-specific handlers (JSON vs SSE)
 
-pub mod initialize;
 pub mod json_mode;
 pub mod message_handlers;
 pub mod sse_mode;
 
 use crate::bindings::wasi::http::types::{IncomingRequest, ResponseOutparam};
-use crate::bindings::wasmcp::mcp_v20251125::mcp::ClientRequest;
+use crate::bindings::wasmcp::mcp_v20260728::mcp::ClientRequest;
 use crate::common;
 use crate::config::{AuthMode, TransportConfig};
 use crate::error::TransportError;
-use crate::http::{session, validation};
+use crate::http::validation;
 use crate::send_error;
 
 pub async fn handle_post(
     request: IncomingRequest,
-    protocol_version: String,
     response_out: ResponseOutparam,
-    session_config: &TransportConfig,
+    config: &TransportConfig,
 ) {
     // Validate Accept header per spec
     if let Err(e) = validation::validate_accept_header(&request) {
         send_error!(response_out, e);
     }
 
-    // Validate session from request headers
-    let session_id = match session::validate_session_from_request(&request, session_config) {
-        Ok(id) => id,
-        Err(e) => send_error!(response_out, e),
-    };
-
     // Validate JWT based on auth mode from config
-    let identity = match session_config.auth_mode {
+    let identity = match config.auth_mode {
         AuthMode::Public => {
             // Public mode - no authentication required
             None
@@ -48,7 +39,7 @@ pub async fn handle_post(
         AuthMode::OAuth => {
             // OAuth mode - JWT required
             // Validate that JWT is configured properly
-            if !session_config.jwt_configured {
+            if !config.jwt_configured {
                 let error = TransportError::internal(
                     "WASMCP_AUTH_MODE=oauth requires JWT_PUBLIC_KEY or JWT_JWKS_URI to be configured",
                 );
@@ -58,10 +49,10 @@ pub async fn handle_post(
             match validation::extract_authorization_header(&request) {
                 Ok(Some(jwt)) => {
                     // Import server-auth for JWT validation
-                    use crate::bindings::wasmcp::mcp_v20251125::server_auth;
+                    use crate::bindings::wasmcp::mcp_v20260728::server_auth;
 
                     match server_auth::decode(&jwt) {
-                        Ok(claims) => Some(crate::bindings::wasmcp::mcp_v20251125::mcp::Identity {
+                        Ok(claims) => Some(crate::bindings::wasmcp::mcp_v20260728::mcp::Identity {
                             jwt,
                             claims,
                         }),
@@ -133,7 +124,7 @@ pub async fn handle_post(
     };
 
     // Parse MCP message
-    let message = match common::parse_mcp_message(
+    let (message, meta) = match common::parse_mcp_message(
         &input_stream,
         common::http_read_limit(),
         &common::plain_json_frame(),
@@ -150,64 +141,38 @@ pub async fn handle_post(
 
     match message {
         common::McpMessage::Request(request_id, client_request) => {
-            // Check if it's initialize - handle specially with plain JSON
-            if matches!(client_request, ClientRequest::Initialize(_)) {
-                drop(input_stream);
-                drop(body_stream);
-                initialize::handle_initialize_request(
-                    request_id,
-                    client_request,
-                    protocol_version,
-                    identity.as_ref(),
-                    response_out,
-                    session_config,
-                );
-                return;
-            }
-
-            // Not initialize - validate session identity binding if both session and identity present
-            // This prevents session hijacking where User B's JWT could access User A's session
-            if let (Some(sess_id), Some(ident)) = (&session_id, &identity)
-                && let Err(e) = session::validate_session_identity(sess_id, ident, session_config)
-            {
+            let checked = validation::validate_mcp_method_header(&request)
+                .and_then(|_| {
+                    validation::validate_protocol_version(&request, meta.protocol_version.as_deref())
+                });
+            if let Err(e) = checked {
                 drop(input_stream);
                 drop(body_stream);
                 send_error!(response_out, e);
             }
 
-            // Not initialize - check if session is required
-            if !session::check_session_required(session_config, session_id.as_deref()) {
-                drop(input_stream);
-                drop(body_stream);
-                let error = TransportError::session_required();
-                send_error!(response_out, error);
-            }
-
-            // Not initialize - delegate to mode-specific handler
-            if session_config.disable_sse {
+            // subscriptions/listen is a long-lived SSE stream regardless of the JSON-mode setting
+            let listen = matches!(client_request, ClientRequest::SubscriptionsListen(_));
+            if config.disable_sse && !listen {
                 json_mode::handle_json_mode(
                     request_id,
                     client_request,
-                    protocol_version,
-                    session_id.as_deref(),
+                    meta,
                     identity.as_ref(),
                     input_stream,
                     body_stream,
                     response_out,
-                    session_config,
                     Some(http_context.clone()),
                 )
             } else {
                 sse_mode::handle_sse_streaming_mode(
                     request_id,
                     client_request,
-                    protocol_version,
-                    session_id.as_deref(),
+                    meta,
                     identity.as_ref(),
                     input_stream,
                     body_stream,
                     response_out,
-                    session_config,
                     Some(http_context.clone()),
                 )
                 .await
@@ -216,9 +181,7 @@ pub async fn handle_post(
         common::McpMessage::Notification(client_notification) => {
             let result = message_handlers::handle_mcp_notification(
                 client_notification,
-                protocol_version,
-                session_id.as_deref(),
-                session_config,
+                &meta,
                 Some(http_context.clone()),
             );
             drop(input_stream);
@@ -229,9 +192,7 @@ pub async fn handle_post(
             let result = message_handlers::handle_mcp_result(
                 result_id,
                 client_result,
-                protocol_version,
-                session_id.as_deref(),
-                session_config,
+                &meta,
             );
             drop(input_stream);
             drop(body_stream);
@@ -241,9 +202,7 @@ pub async fn handle_post(
             let result = message_handlers::handle_mcp_error(
                 error_id,
                 error_code,
-                protocol_version,
-                session_id.as_deref(),
-                session_config,
+                &meta,
             );
             drop(input_stream);
             drop(body_stream);
@@ -255,7 +214,7 @@ pub async fn handle_post(
 /// Build HTTP context for authorization
 fn build_http_context(
     request: &IncomingRequest,
-) -> crate::bindings::wasmcp::mcp_v20251125::server_auth::HttpContext {
+) -> crate::bindings::wasmcp::mcp_v20260728::server_auth::HttpContext {
     // Extract HTTP method
     let method = match request.method() {
         crate::bindings::wasi::http::types::Method::Get => "GET",
@@ -297,7 +256,7 @@ fn build_http_context(
         }
     }
 
-    crate::bindings::wasmcp::mcp_v20251125::server_auth::HttpContext {
+    crate::bindings::wasmcp::mcp_v20260728::server_auth::HttpContext {
         method,
         path,
         headers,

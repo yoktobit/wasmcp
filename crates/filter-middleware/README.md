@@ -63,14 +63,13 @@ The `inspect_routing` tool shows:
 3. Parse tool metadata once, cache for reuse
 4. Apply path filters (whitelist → blacklist)
 5. Apply tag filters (global + path-specific)
-6. Cache filtered tool list in session storage
+6. On `tools/call`, recompute the same filter to validate the requested tool
 
 **Modules**:
 - `lib.rs` - Handler and request routing
 - `config.rs` - Config discovery and aggregation
 - `filtering.rs` - Filtering pipeline with metadata caching
 - `metadata.rs` - Tool metadata parsing and predicates
-- `session.rs` - Session storage integration
 - `diagnostic.rs` - `inspect_routing` tool implementation
 - `types.rs` - Data structures
 - `helpers.rs` - Utility functions
@@ -79,8 +78,7 @@ The `inspect_routing` tool shows:
 
 - Config loading happens per request (no caching - WASM stateless)
 - Metadata parsing is cached during single request pipeline
-- Session storage used to persist filtered tool list across requests
-- Missing session gracefully allows unfiltered tool calls
+- The protocol is stateless, so `tools/call` re-runs the filter instead of reading a stored tool list
 
 ## Building
 

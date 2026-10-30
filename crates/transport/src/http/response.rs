@@ -8,7 +8,6 @@
 use crate::bindings::wasi::http::types::{
     Fields, OutgoingBody, OutgoingResponse, ResponseOutparam,
 };
-use crate::config::TransportConfig;
 use crate::error::TransportError;
 
 /// Macro to send an error response and return early
@@ -106,6 +105,7 @@ impl Default for ResponseBuilder {
 pub fn transport_error_to_response(error: &TransportError) -> OutgoingResponse {
     let status_code = error.http_status_code();
     let error_message = error.message();
+    let error_code = error.json_rpc_code();
 
     let response = OutgoingResponse::new(Fields::new());
     let _ = response.set_status_code(status_code);
@@ -128,7 +128,7 @@ pub fn transport_error_to_response(error: &TransportError) -> OutgoingResponse {
                 "jsonrpc": "2.0",
                 "id": null,
                 "error": {
-                    "code": -32700,
+                    "code": error_code,
                     "message": error_message
                 }
             });
@@ -141,24 +141,13 @@ pub fn transport_error_to_response(error: &TransportError) -> OutgoingResponse {
     response
 }
 
-/// Create 405 Method Not Allowed response with appropriate Allow header
-pub fn create_method_not_allowed_response(
-    session_config: &TransportConfig,
-) -> Result<OutgoingResponse, String> {
-    // Set Allow header based on session support
-    let allow_methods = if session_config.session_enabled {
-        b"POST, DELETE".to_vec()
-    } else {
-        b"POST".to_vec()
-    };
-
-    // Create headers first
+/// Create 405 Method Not Allowed response (only POST is supported)
+pub fn create_method_not_allowed_response() -> Result<OutgoingResponse, String> {
     let headers = Fields::new();
     headers
-        .set("allow", &[allow_methods])
+        .set("allow", &[b"POST".to_vec()])
         .map_err(|_| "Failed to set allow header")?;
 
-    // Create response with headers
     let response = OutgoingResponse::new(headers);
     response
         .set_status_code(405)

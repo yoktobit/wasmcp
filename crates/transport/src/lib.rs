@@ -2,9 +2,8 @@
 //!
 //! This transport component provides orchestration for MCP servers:
 //! - Delegates I/O parsing/serialization to server-io component
-//! - Manages session lifecycle via session-manager (HTTP only)
 //! - Coordinates with middleware via server-handler
-//! - Handles transport-level MCP methods (initialize, ping, logging/setLevel)
+//! - Handles transport-level MCP methods (server/discover, subscriptions/listen)
 //!
 //! Exports both HTTP and CLI interfaces - runtime imports what it needs
 //!
@@ -16,16 +15,6 @@
 //!   - Default: `false` (SSE enabled - supports streaming and notifications)
 //!   - Set to `true` to use plain JSON mode (single response, notifications suppressed)
 //!   - Only affects HTTP transport; stdio transport is unaffected
-//!
-//! ## Session Management
-//!
-//! - **`WASMCP_SESSION_ENABLED`** - Enable HTTP session support
-//!   - Default: `false` (stateless HTTP)
-//!   - Set to `true` to enable session tracking via Mcp-Session-Id header
-//!
-//! - **`WASMCP_SESSION_BUCKET`** - Key-value bucket name for session storage
-//!   - Default: `""` (default bucket)
-//!   - Used when `WASMCP_SESSION_ENABLED=true`
 //!
 //! ## Authentication & Authorization
 //!
@@ -90,7 +79,6 @@ mod common;
 mod config;
 mod error;
 mod http;
-mod session_keys;
 mod stdio;
 
 bindings::export!(Component with_types_in bindings);

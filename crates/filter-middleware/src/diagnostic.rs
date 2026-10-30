@@ -1,6 +1,6 @@
 use crate::INTERNAL_REQUEST_ID_VALUE;
-use crate::bindings::exports::wasmcp::mcp_v20251125::server_handler::MessageContext;
-use crate::bindings::wasmcp::mcp_v20251125::mcp::*;
+use crate::bindings::exports::wasmcp::mcp_v20260728::server_handler::MessageContext;
+use crate::bindings::wasmcp::mcp_v20260728::mcp::*;
 use crate::config::load_and_aggregate_configs;
 use crate::helpers::fetch_tools_from_downstream;
 use crate::metadata::{parse_tool_metadata, tool_is_blacklisted, tool_passes_whitelist};

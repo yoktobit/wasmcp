@@ -181,11 +181,10 @@ pub async fn read_branch_resource(
             }
         }
         "wit" => {
-            // resource is like "mcp", "server", or "sessions"
+            // resource is like "mcp" or "server"
             match resource.as_str() {
-                "mcp" => "spec/2025-06-18/wit/mcp.wit",
-                "server" => "spec/2025-06-18/wit/server.wit",
-                "sessions" => "spec/2025-06-18/wit/sessions.wit",
+                "mcp" => "spec/2026-07-28/wit/mcp.wit",
+                "server" => "spec/2026-07-28/wit/server.wit",
                 _ => return Err(McpError::resource_not_found(uri.to_string(), None)),
             }
         }

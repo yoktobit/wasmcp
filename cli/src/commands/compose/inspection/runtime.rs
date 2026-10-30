@@ -87,20 +87,14 @@ pub fn detect_runtime(component_bytes: &[u8]) -> Result<RuntimeInfo> {
                 // Detect required WASI capabilities
                 if namespace == "wasi" {
                     match name.as_str() {
-                        "cli" => {
-                            if !capabilities.contains(&"cli".to_string()) {
-                                capabilities.push("cli".to_string());
-                            }
+                        "cli" if !capabilities.contains(&"cli".to_string()) => {
+                            capabilities.push("cli".to_string());
                         }
-                        "http" => {
-                            if !capabilities.contains(&"http".to_string()) {
-                                capabilities.push("http".to_string());
-                            }
+                        "http" if !capabilities.contains(&"http".to_string()) => {
+                            capabilities.push("http".to_string());
                         }
-                        "keyvalue" => {
-                            if !capabilities.contains(&"keyvalue".to_string()) {
-                                capabilities.push("keyvalue".to_string());
-                            }
+                        "keyvalue" if !capabilities.contains(&"keyvalue".to_string()) => {
+                            capabilities.push("keyvalue".to_string());
                         }
                         _ => {}
                     }

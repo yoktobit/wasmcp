@@ -77,8 +77,7 @@ pub fn discover_capabilities(frame: &MessageFrame) -> ServerCapabilities {
                 };
 
                 // Test if completions are supported
-                let completion_ctx =
-                    create_message_context(None, &empty_meta(), None, frame, None);
+                let completion_ctx = create_message_context(None, &empty_meta(), None, frame, None);
                 let req = ClientRequest::CompletionComplete(completion_request);
                 let completion_message =
                     ClientMessage::Request((RequestId::Number(CAPABILITY_PROBE_REQUEST_ID), req));

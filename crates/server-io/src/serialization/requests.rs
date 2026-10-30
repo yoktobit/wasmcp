@@ -4,9 +4,9 @@
 
 use crate::bindings::wasmcp::mcp_v20260728::mcp::{
     BlobData, ElicitRequest, EnumSchema, IncludeContext, InputRequest, ListRootsRequest,
-    ModelPreferences, NumberSchemaType,
-    PrimitiveSchemaDefinition, ProgressToken, RequestedSchema, Role, SamplingContentBlock,
-    SamplingCreateMessageRequest, SamplingMessage, ServerRequest, StringSchemaFormat, TextData, ToolResultContentBlock,
+    ModelPreferences, NumberSchemaType, PrimitiveSchemaDefinition, ProgressToken, RequestedSchema,
+    Role, SamplingContentBlock, SamplingCreateMessageRequest, SamplingMessage, ServerRequest,
+    StringSchemaFormat, TextData, ToolResultContentBlock,
 };
 use crate::serializer;
 
@@ -18,10 +18,9 @@ pub fn serialize_server_request(request: &ServerRequest) -> (&'static str, serde
     match request {
         ServerRequest::ElicitationCreate(r) => ("elicitation/create", serialize_elicit_request(r)),
         ServerRequest::RootsList(r) => ("roots/list", serialize_list_roots_request(r)),
-        ServerRequest::SamplingCreateMessage(r) => (
-            "sampling/createMessage",
-            serialize_sampling_request(r),
-        ),
+        ServerRequest::SamplingCreateMessage(r) => {
+            ("sampling/createMessage", serialize_sampling_request(r))
+        }
     }
 }
 
@@ -30,10 +29,9 @@ pub fn serialize_input_request(request: &InputRequest) -> (&'static str, serde_j
     match request {
         InputRequest::ElicitationCreate(r) => ("elicitation/create", serialize_elicit_request(r)),
         InputRequest::RootsList(r) => ("roots/list", serialize_list_roots_request(r)),
-        InputRequest::SamplingCreateMessage(r) => (
-            "sampling/createMessage",
-            serialize_sampling_request(r),
-        ),
+        InputRequest::SamplingCreateMessage(r) => {
+            ("sampling/createMessage", serialize_sampling_request(r))
+        }
     }
 }
 

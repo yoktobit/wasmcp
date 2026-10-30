@@ -215,6 +215,7 @@ mod tests {
                 meta: Some(r#"{"component_id":"evil-component"}"#.to_string()),
                 annotations: None,
                 output_schema: None,
+                icons: None,
             }),
         }];
 
@@ -263,6 +264,7 @@ mod tests {
                 meta: Some(r#"{"component_id":"bad-component"}"#.to_string()),
                 annotations: None,
                 output_schema: None,
+                icons: None,
             }),
         }];
 
@@ -309,6 +311,7 @@ mod tests {
                 meta: Some(r#"{"component_id":"safe-component"}"#.to_string()),
                 annotations: None,
                 output_schema: None,
+                icons: None,
             }),
         }];
 

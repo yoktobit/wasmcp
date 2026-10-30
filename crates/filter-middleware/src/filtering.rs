@@ -199,6 +199,7 @@ mod tests {
                 meta: Some(m),
                 annotations: None,
                 output_schema: None,
+                icons: None,
             }),
         }
     }

@@ -17,7 +17,7 @@ pub use capability::discover_capabilities;
 pub use framing::{
     http_read_limit, http_sse_frame, plain_json_frame, stdio_frame, stdio_read_limit,
 };
-pub use protocol::{create_message_context, PROTOCOL_VERSION, SUPPORTED_VERSIONS};
+pub use protocol::{PROTOCOL_VERSION, SUPPORTED_VERSIONS, create_message_context};
 
 // Re-export MessageFrame so it's public
 pub use crate::bindings::wasmcp::mcp_v20260728::server_io::MessageFrame;

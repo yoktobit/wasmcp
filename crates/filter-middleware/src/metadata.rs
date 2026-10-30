@@ -389,6 +389,7 @@ mod tests {
                 ),
                 annotations: None,
                 output_schema: None,
+                icons: None,
             }),
         };
 
@@ -428,6 +429,7 @@ mod tests {
                 meta: Some("not valid json".to_string()),
                 annotations: None,
                 output_schema: None,
+                icons: None,
             }),
         };
 

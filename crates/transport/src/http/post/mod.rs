@@ -141,10 +141,9 @@ pub async fn handle_post(
 
     match message {
         common::McpMessage::Request(request_id, client_request) => {
-            let checked = validation::validate_mcp_method_header(&request)
-                .and_then(|_| {
-                    validation::validate_protocol_version(&request, meta.protocol_version.as_deref())
-                });
+            let checked = validation::validate_mcp_method_header(&request).and_then(|_| {
+                validation::validate_protocol_version(&request, meta.protocol_version.as_deref())
+            });
             if let Err(e) = checked {
                 drop(input_stream);
                 drop(body_stream);
@@ -189,21 +188,13 @@ pub async fn handle_post(
             message_handlers::respond_with_result(result, response_out);
         }
         common::McpMessage::Result(result_id, client_result) => {
-            let result = message_handlers::handle_mcp_result(
-                result_id,
-                client_result,
-                &meta,
-            );
+            let result = message_handlers::handle_mcp_result(result_id, client_result, &meta);
             drop(input_stream);
             drop(body_stream);
             message_handlers::respond_with_result(result, response_out);
         }
         common::McpMessage::Error(error_id, error_code) => {
-            let result = message_handlers::handle_mcp_error(
-                error_id,
-                error_code,
-                &meta,
-            );
+            let result = message_handlers::handle_mcp_error(error_id, error_code, &meta);
             drop(input_stream);
             drop(body_stream);
             message_handlers::respond_with_result(result, response_out);

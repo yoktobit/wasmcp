@@ -11,8 +11,8 @@ use crate::bindings::wasmcp::mcp_v20260728::mcp::{
     ContentOptions, ElicitResult, ElicitResultAction, ElicitResultContent, Error, ErrorCode,
     GetPromptRequest, Implementation, InputResponse, InputRetry, ListPromptsRequest,
     ListResourceTemplatesRequest, ListResourcesRequest, ListRootsResult, ListToolsRequest,
-    LogLevel, NotificationOptions, ProgressNotification, ProgressToken,
-    ProtocolVersion, ReadResourceRequest, RequestId, Role, Root, SamplingCreateMessageResult,
+    LogLevel, NotificationOptions, ProgressNotification, ProgressToken, ProtocolVersion,
+    ReadResourceRequest, RequestId, Role, Root, SamplingCreateMessageResult,
     SubscriptionsListenRequest, TextContent, TextData,
 };
 use serde::Deserialize;

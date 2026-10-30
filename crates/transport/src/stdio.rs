@@ -43,9 +43,7 @@ impl Guest for StdioTransportGuest {
                     let frame = common::stdio_frame();
 
                     let outcome = match client_request {
-                        ClientRequest::Discover => {
-                            Ok(Some(common::handle_discover(&frame)))
-                        }
+                        ClientRequest::Discover => Ok(Some(common::handle_discover(&frame))),
                         ClientRequest::SubscriptionsListen(_) => {
                             if let Err(e) =
                                 common::acknowledge_subscriptions(&stdout, &request_id, &frame)

@@ -4,12 +4,11 @@
 //! with support for both HTTP (SSE) and stdio (newline-delimited) transports.
 
 use crate::bindings::wasmcp::mcp_v20260728::mcp::{
-    Annotations, BlobData, CallToolResult, CompleteResult, ContentBlock, ErrorCode,
-    DiscoverResult, GetPromptResult, Implementation, InputRequest, InputRequiredResult,
-    ListPromptsResult,
-    ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, McpResource, Prompt,
-    PromptMessage, ProtocolVersion, ReadResourceResult, RequestId, ResourceContents,
-    ResourceTemplate, Role, CacheScope, ServerCapabilities, ServerResult, TextData, Tool,
+    Annotations, BlobData, CacheScope, CallToolResult, CompleteResult, ContentBlock,
+    DiscoverResult, ErrorCode, GetPromptResult, Implementation, InputRequest, InputRequiredResult,
+    ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
+    McpResource, Prompt, PromptMessage, ProtocolVersion, ReadResourceResult, RequestId,
+    ResourceContents, ResourceTemplate, Role, ServerCapabilities, ServerResult, TextData, Tool,
 };
 use crate::stream_reader::{StreamConfig, read_blob_stream, read_text_stream};
 use serde::{Deserialize, Serialize};
@@ -819,7 +818,9 @@ fn serialize_result_body(response: &ServerResult) -> Value {
                 })
             })
         }
-        ServerResult::InputRequired(input_required) => convert_input_required_result(input_required),
+        ServerResult::InputRequired(input_required) => {
+            convert_input_required_result(input_required)
+        }
         ServerResult::ToolsList(tools_result) => match convert_list_tools_result(tools_result) {
             Ok(json_result) => serde_json::to_value(json_result).unwrap_or_else(|e| {
                 json!({

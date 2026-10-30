@@ -337,7 +337,7 @@ pub fn find_most_specific_path_rule<'a>(
         .collect();
 
     // Sort by path length (descending) to get most specific first
-    matches.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    matches.sort_by_key(|m| std::cmp::Reverse(m.0.len()));
 
     // Return most specific match
     matches.first().map(|(_, rule)| *rule)

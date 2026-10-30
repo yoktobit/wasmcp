@@ -5,9 +5,7 @@
 //! - Helper functions for common response types (errors, 405, 202)
 //! - Macros to reduce boilerplate
 
-use crate::bindings::wasi::http::types::{
-    Fields, OutgoingBody, OutgoingResponse, ResponseOutparam,
-};
+use crate::bindings::wasi::http::types::{Fields, OutgoingBody, OutgoingResponse};
 use crate::error::TransportError;
 
 /// Macro to send an error response and return early
@@ -32,7 +30,7 @@ macro_rules! send_error {
 /// ResponseBuilder::new()
 ///     .status(200)
 ///     .header("content-type", b"application/json")
-///     .build_and_send(response_out)?;
+///     .build()?;
 /// ```
 pub struct ResponseBuilder {
     status: u16,
@@ -77,21 +75,6 @@ impl ResponseBuilder {
             .map_err(|_| TransportError::internal("Failed to set status code"))?;
 
         Ok(response)
-    }
-
-    /// Build and immediately send the response to ResponseOutparam
-    pub fn build_and_send(self, response_out: ResponseOutparam) -> Result<(), ()> {
-        match self.build() {
-            Ok(response) => {
-                ResponseOutparam::set(response_out, Ok(response));
-                Ok(())
-            }
-            Err(e) => {
-                let error_response = transport_error_to_response(&e);
-                ResponseOutparam::set(response_out, Ok(error_response));
-                Err(())
-            }
-        }
     }
 }
 

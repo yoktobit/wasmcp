@@ -1,2 +1,2 @@
-mcp-v20260728 = "https://github.com/wasmcp/wasmcp/releases/download/mcp-v2026-07-28-v0.1.0/wasmcp-mcp-v2026-07-28-0.1.0-source.tar.gz"
+mcp-v20260728 = "../../../spec/2026-07-28/wit"
 keyvalue = "https://github.com/wasmcp/wasmcp/releases/download/keyvalue-v0.1.0/wasmcp-keyvalue-0.1.0-source.tar.gz"

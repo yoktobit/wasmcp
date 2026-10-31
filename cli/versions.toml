@@ -12,15 +12,15 @@
 mcp-v20260728 = "0.1.0"
 
 # Component versions for downloading from registry
-transport = "0.1.7"
-server-io = "0.1.6"
-authorization = "0.1.2"
-kv-store = "0.1.2"
-method-not-found = "0.1.10"
-tools-middleware = "0.1.10"
-resources-middleware = "0.1.10"
-prompts-middleware = "0.1.10"
-filter-middleware = "0.1.2"
+transport = "0.1.8"
+server-io = "0.1.7"
+authorization = "0.1.3"
+kv-store = "0.1.3"
+method-not-found = "0.1.11"
+tools-middleware = "0.1.11"
+resources-middleware = "0.1.11"
+prompts-middleware = "0.1.11"
+filter-middleware = "0.1.3"
 
 [wasi]
 # WASI interface versions for transport exports

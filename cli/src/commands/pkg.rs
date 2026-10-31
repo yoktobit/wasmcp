@@ -18,6 +18,11 @@ use wasm_pkg_common::{
     package::PackageSpec,
 };
 
+/// Default OCI namespace prefix: components are pulled from `ghcr.io/<prefix>wasmcp/<name>`.
+/// Override with `WASMCP_REGISTRY_PREFIX` (e.g. `wasmcp/` for upstream); an empty value
+/// gives upstream's `ghcr.io/wasmcp/<name>`.
+const DEFAULT_REGISTRY_PREFIX: &str = "yoktobit/";
+
 /// Create a config with wasmcp namespace mapped to ghcr.io
 ///
 /// This loads the user's global wasm-pkg config (for authentication and custom registries)
@@ -33,11 +38,15 @@ pub async fn create_wasmcp_config() -> Result<Config> {
         .parse()
         .expect("BUG: Failed to parse hardcoded 'wasmcp' namespace");
 
+    let registry_prefix = std::env::var("WASMCP_REGISTRY_PREFIX")
+        .unwrap_or_else(|_| DEFAULT_REGISTRY_PREFIX.to_string());
+
     // Create RegistryMetadata using serde_json deserialization
     let metadata: RegistryMetadata = serde_json::from_value(serde_json::json!({
         "preferredProtocol": "oci",
         "oci": {
-            "registry": "ghcr.io"
+            "registry": "ghcr.io",
+            "namespacePrefix": registry_prefix
         }
     }))
     .map_err(|e| anyhow::anyhow!("internal error creating registry metadata: {}", e))?;
@@ -221,11 +230,48 @@ pub async fn download_packages(
     Ok(())
 }
 
+/// WIT packages embedded in the CLI so new projects don't depend on a published release.
+/// (directory name under wit/deps/, file name, contents)
+const EMBEDDED_WIT: &[(&str, &str, &str)] = &[
+    (
+        "mcp-v20260728",
+        "mcp.wit",
+        include_str!("../../../spec/2026-07-28/wit/mcp.wit"),
+    ),
+    (
+        "mcp-v20260728",
+        "server.wit",
+        include_str!("../../../spec/2026-07-28/wit/server.wit"),
+    ),
+    (
+        "auth",
+        "jwt.wit",
+        include_str!("../../../wit/auth/wit/jwt.wit"),
+    ),
+    (
+        "auth",
+        "oauth.wit",
+        include_str!("../../../wit/auth/wit/oauth.wit"),
+    ),
+];
+
+/// Write the embedded MCP and auth WIT packages into `deps_dir`
+fn write_embedded_wit(deps_dir: &Path) -> Result<()> {
+    for (dir, file, contents) in EMBEDDED_WIT {
+        let dir = deps_dir.join(dir);
+        std::fs::create_dir_all(&dir)
+            .with_context(|| format!("Failed to create {}", dir.display()))?;
+        std::fs::write(dir.join(file), contents)
+            .with_context(|| format!("Failed to write {}/{}", dir.display(), file))?;
+    }
+    Ok(())
+}
+
 /// Fetch WIT dependencies for a project
 ///
-/// This uses wit-deps library to fetch dependencies from GitHub URLs specified in wit/deps.toml
-/// wit-deps correctly handles extracting WIT files from tarballs and creating the proper
-/// directory structure.
+/// The MCP and auth WIT packages are embedded in the CLI and written directly to wit/deps/.
+/// Remaining dependencies (e.g. wasi:io) are fetched with the wit-deps library from the URLs
+/// in wit/deps.toml.
 ///
 /// If `update` is true, clears existing lock file to force re-resolution
 pub async fn fetch_wit_dependencies(project_dir: &Path, update: bool) -> Result<()> {
@@ -247,6 +293,8 @@ pub async fn fetch_wit_dependencies(project_dir: &Path, update: bool) -> Result<
         .await
         .context("Failed to fetch WIT dependencies")?;
 
+    write_embedded_wit(&deps_dir)?;
+
     println!("   WIT dependencies resolved");
 
     Ok(())
@@ -256,6 +304,15 @@ pub async fn fetch_wit_dependencies(project_dir: &Path, update: bool) -> Result<
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_write_embedded_wit() {
+        let dir = TempDir::new().unwrap();
+        write_embedded_wit(dir.path()).unwrap();
+        assert!(dir.path().join("mcp-v20260728/mcp.wit").exists());
+        assert!(dir.path().join("mcp-v20260728/server.wit").exists());
+        assert!(dir.path().join("auth/jwt.wit").exists());
+    }
 
     /// Test create_wasmcp_config creates config with wasmcp namespace
     #[tokio::test]

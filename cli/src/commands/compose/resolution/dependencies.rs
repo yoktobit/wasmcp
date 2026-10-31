@@ -105,8 +105,13 @@ async fn discover_transitive_dependencies(
             continue;
         }
 
-        // Get the path to this dependency
-        let dep_path = get_dependency_path(&dep_name, resolver, deps_dir)?;
+        // Get the path to this dependency; a local override is inspected in place
+        let dep_path = match overrides.get(&dep_name) {
+            Some(spec) if Path::new(spec).is_file() => PathBuf::from(spec),
+            // shortcut: remote (URL) overrides can't be inspected for transitive deps
+            Some(_) => continue,
+            None => get_dependency_path(&dep_name, resolver, deps_dir)?,
+        };
 
         // Inspect its imports
         let imports = crate::commands::compose::inspection::check_component_imports(&dep_path)?;
@@ -116,7 +121,9 @@ async fn discover_transitive_dependencies(
                 // Always add to all_deps (overrides just change where we get the file)
                 if all_deps.insert(component_name.to_string()) {
                     // New dependency found
-                    if !overrides.contains_key(component_name) {
+                    if overrides.contains_key(component_name) {
+                        to_inspect.push(component_name.to_string());
+                    } else {
                         // Not overridden - download it so we can inspect it
                         let version = resolver.get_version(component_name)?;
                         let mut specs = vec![interfaces::package(component_name, &version)];
@@ -192,9 +199,12 @@ pub async fn download_dependencies(
         return Ok(HashSet::new());
     }
 
-    // Download initial set
+    // Download initial set (overridden components are resolved from their override)
     let mut specs = Vec::new();
     for component in &required {
+        if config.overrides.contains_key(component) {
+            continue;
+        }
         let version = config.resolver.get_version(component)?;
         specs.push(interfaces::package(component, &version));
 

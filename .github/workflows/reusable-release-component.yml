@@ -27,7 +27,7 @@ on:
 env:
   RUST_VERSION: "1.89"
   REGISTRY: ghcr.io
-  REGISTRY_NAMESPACE: wasmcp
+  REGISTRY_NAMESPACE: ${{ github.repository_owner }}/wasmcp
 
 jobs:
   validate:
@@ -78,11 +78,11 @@ jobs:
           mkdir -p ~/.config/wasm-pkg
           cat > ~/.config/wasm-pkg/config.toml <<EOF
           [namespace_registries]
-          wasmcp = "ghcr.io"
+          wasmcp = { registry = "ghcr.io", metadata = { preferredProtocol = "oci", oci = { registry = "ghcr.io", namespacePrefix = "${{ github.repository_owner }}/" } } }
 
           [registry."ghcr.io".oci.auth]
           username = "${{ github.actor }}"
-          password = "${{ secrets.GHCR_TOKEN }}"
+          password = "${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}"
           EOF
 
       - name: Fetch WIT dependencies

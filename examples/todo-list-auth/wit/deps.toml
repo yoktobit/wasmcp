@@ -1,2 +1,3 @@
 mcp-v20260728 = "../../../spec/2026-07-28/wit"
 keyvalue = "https://github.com/wasmcp/wasmcp/releases/download/keyvalue-v0.1.0/wasmcp-keyvalue-0.1.0-source.tar.gz"
+auth = "https://github.com/wasmcp/wasmcp/releases/download/auth-v0.1.1/wasmcp-auth-0.1.1-source.tar.gz"

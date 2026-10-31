@@ -1,4 +1,5 @@
 [auth]
+url = "https://github.com/wasmcp/wasmcp/releases/download/auth-v0.1.1/wasmcp-auth-0.1.1-source.tar.gz"
 sha256 = "372c119e7f4828bcd24fffa18efa099466dde431ca6fa152da70082dad7d5dea"
 sha512 = "c9778f69ff6017f122d6c9135253c7b263270476962a78edef4bfc3a38ada9d64e404bc2715f7611db14d876afdad752b04003558def2d518884a4da82baba40"
 
@@ -16,4 +17,3 @@ sha512 = "b681313c99748c01d4eab63c342930e2f1321978863a2af587f46ffdc9d83d517e7571
 path = "../../../spec/2026-07-28/wit"
 sha256 = "cd4f3eae4a3ad87620c9868b31923c319dfb20489283fc6a4cc2cfcfdfb45913"
 sha512 = "d0b7e5343011466b2aec6b87bdb57c05661f61e738f97d1dee98e6f97672a0fa1cbfc0764edea52fcc6e577664d9060421df4f05ebde0b0c70e04cf01c25b51b"
-deps = ["auth"]

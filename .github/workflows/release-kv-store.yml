@@ -76,7 +76,7 @@ jobs:
           wit-deps
 
           echo "Fetching WIT deps for kv-store draft2..."
-          WIT_DEPS_PATH=wit-draft2 wit-deps
+          wit-deps -d wit-draft2/deps -m wit-draft2/deps.toml -l wit-draft2/deps.lock
 
       - name: Build draft2 variant
         run: |

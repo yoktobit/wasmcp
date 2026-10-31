@@ -1,4 +1,4 @@
-use wasi:io/streams@0.2.8;
+use wasi:io/streams@0.2.9;
 
 /// Server-side MCP message handler.
 ///
@@ -59,7 +59,7 @@ interface server-handler {
 /// This interface enables servers to parse and send MCP messages over streams.
 @since(version = 0.1.0)
 interface server-io {
-    use wasi:io/streams@0.2.8.{
+    use wasi:io/streams@0.2.9.{
         input-stream,
         output-stream,
         stream-error,

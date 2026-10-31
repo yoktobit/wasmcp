@@ -1,4 +1,0 @@
-# Rust 1.97+ std imports wasi:io@0.2.9, which conflicts with the wasi:io@0.2.8 used by wasmcp components
-[toolchain]
-channel = "1.96.0"
-targets = ["wasm32-wasip2"]

@@ -1,8 +1,8 @@
-package wasmcp:authorization@0.1.3;
+package wasmcp:authorization@0.1.4;
 
 world authorization {
-    import wasi:cli/environment@0.2.8;
-    import wasi:http/outgoing-handler@0.2.8;
+    import wasi:cli/environment@0.2.9;
+    import wasi:http/outgoing-handler@0.2.9;
     import wasmcp:keyvalue/store@0.1.0;
 
     // MCP-required interface (now uses structured jwt-claims)

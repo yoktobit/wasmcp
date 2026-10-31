@@ -8,7 +8,7 @@ package wasmcp:mcp-v20260728@0.1.0;
 /// <https://modelcontextprotocol.io/specification/2026-07-28>
 @since(version = 0.1.0)
 interface mcp {
-    use wasi:io/streams@0.2.8.{
+    use wasi:io/streams@0.2.9.{
         input-stream,
     };
     use wasmcp:auth/types@0.1.1.{jwt, jwt-claims};

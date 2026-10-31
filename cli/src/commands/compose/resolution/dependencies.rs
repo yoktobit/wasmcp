@@ -436,7 +436,7 @@ mod tests {
 
         // Test non-wasmcp interfaces
         assert_eq!(
-            map_interface_to_component("wasi:http/outgoing-handler@0.2.8"),
+            map_interface_to_component("wasi:http/outgoing-handler@0.2.9"),
             None
         );
 

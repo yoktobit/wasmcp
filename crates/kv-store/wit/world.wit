@@ -1,8 +1,8 @@
-package wasmcp:kv-store@0.1.3;
+package wasmcp:kv-store@0.1.4;
 
 world kv-store {
-    import wasi:io/streams@0.2.8;
-    import wasi:cli/environment@0.2.8;
+    import wasi:io/streams@0.2.9;
+    import wasi:cli/environment@0.2.9;
 
     import wasi:keyvalue/store@0.2.0-draft;
     import wasi:keyvalue/batch@0.2.0-draft;

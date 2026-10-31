@@ -348,9 +348,9 @@ mod tests {
         let resolver = VersionResolver::new().unwrap();
         assert_eq!(
             wasi_http_handler(&resolver).unwrap(),
-            "wasi:http/incoming-handler@0.2.8"
+            "wasi:http/incoming-handler@0.2.9"
         );
-        assert_eq!(wasi_cli_run(&resolver).unwrap(), "wasi:cli/run@0.2.8");
+        assert_eq!(wasi_cli_run(&resolver).unwrap(), "wasi:cli/run@0.2.9");
     }
 
     #[test]

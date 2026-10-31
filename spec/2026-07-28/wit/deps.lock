@@ -4,6 +4,7 @@ sha256 = "372c119e7f4828bcd24fffa18efa099466dde431ca6fa152da70082dad7d5dea"
 sha512 = "c9778f69ff6017f122d6c9135253c7b263270476962a78edef4bfc3a38ada9d64e404bc2715f7611db14d876afdad752b04003558def2d518884a4da82baba40"
 
 [io]
-url = "https://github.com/WebAssembly/wasi-io/archive/refs/tags/v0.2.8.tar.gz"
-sha256 = "9f1ad5da70f621bbd4c69e3bd90250a0c12ecfde266aa8f99684fc44bc1e7c15"
-sha512 = "6d0a9db6848f24762933d1c168a5b5b1065ba838c253ee20454afeb8dd1a049b918d25deff556083d68095dd3126ae131ac3e738774320eee5d918f5a4b5354e"
+url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz"
+prefix = "WASI-0.2.9/proposals/io/wit"
+sha256 = "3699f94c981bacfd4034e92d47d0c888befb9297c54f6082bd37e83c86e5796e"
+sha512 = "fd3fdd9d6b0df1ee8846aaaba469942e110c6ffc935d331651e338ff9c75b453748d626fffeee9a6026f1ed90d94d8854887e209c5832acc26da6385d189db6b"

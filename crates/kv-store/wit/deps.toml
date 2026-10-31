@@ -1,4 +1,8 @@
-io = "https://github.com/WebAssembly/wasi-io/archive/refs/tags/v0.2.8.tar.gz"
-cli = "https://github.com/WebAssembly/wasi-cli/archive/refs/tags/v0.2.8.tar.gz"
+io = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/io/wit" }
+clocks = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/clocks/wit" }
+random = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/random/wit" }
+filesystem = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/filesystem/wit" }
+sockets = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/sockets/wit" }
+cli = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/cli/wit" }
 wasi-keyvalue = "https://github.com/WebAssembly/wasi-keyvalue/archive/v0.2.0-draft.tar.gz"
 keyvalue = "https://github.com/wasmcp/wasmcp/releases/download/keyvalue-v0.1.0/wasmcp-keyvalue-0.1.0-source.tar.gz"

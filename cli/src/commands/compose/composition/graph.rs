@@ -394,8 +394,8 @@ mod tests {
         assert!(cli_run.starts_with("wasi:cli/run@"));
 
         // Verify specific current versions
-        assert_eq!(http_handler, "wasi:http/incoming-handler@0.2.8");
-        assert_eq!(cli_run, "wasi:cli/run@0.2.8");
+        assert_eq!(http_handler, "wasi:http/incoming-handler@0.2.9");
+        assert_eq!(cli_run, "wasi:cli/run@0.2.9");
     }
 
     /// Test server handler interface construction

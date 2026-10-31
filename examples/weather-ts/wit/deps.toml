@@ -1,4 +1,9 @@
-io = "https://github.com/WebAssembly/wasi-io/archive/refs/tags/v0.2.8.tar.gz"
+io = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/io/wit" }
+clocks = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/clocks/wit" }
+random = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/random/wit" }
+filesystem = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/filesystem/wit" }
+sockets = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/sockets/wit" }
+cli = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/cli/wit" }
+http = { url = "https://github.com/WebAssembly/WASI/archive/refs/tags/v0.2.9.tar.gz", prefix = "WASI-0.2.9/proposals/http/wit" }
 auth = "https://github.com/wasmcp/wasmcp/releases/download/auth-v0.1.1/wasmcp-auth-0.1.1-source.tar.gz"
-http = "https://github.com/WebAssembly/wasi-http/archive/refs/tags/v0.2.8.tar.gz"
 mcp-v20260728 = "../../../spec/2026-07-28/wit"
